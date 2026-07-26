@@ -1,0 +1,112 @@
+[project]
+name = "spenza"
+version = "0.1.0"
+description = "Production-ready Expense Tracker REST API"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "gunicorn>=23.0.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "pydantic[email]>=2.9.0",
+    "pyjwt[crypto]>=2.9.0",
+    "argon2-cffi>=23.1.0",
+    "python-multipart>=0.0.12",
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.2",
+    "jinja2>=3.1.4",
+    "slowapi>=0.1.9",
+    "structlog>=24.4.0",
+    "aiosmtplib>=3.0.2",
+    "user-agents>=2.2.0",
+]
+
+[project.scripts]
+spenza = "src.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.27.2",
+    "aiosqlite>=0.20.0",
+    "ruff>=0.7.4",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.1",
+    "faker>=33.0.0",
+    "types-pyyaml>=6.0.12.20240917",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+    "ASYNC", "S", "A", "COM", "DTZ", "PIE", "T20", "PT", "ARG",
+]
+ignore = [
+    "COM812",
+    "S101",
+    "UP046",  # pydantic generic models require `Generic[T]`, not PEP 695 type params
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "ARG001", "PT004", "B008"]
+"alembic/**" = ["T20"]
+"scripts/**" = ["T20"]
+# slowapi requires an unused `request: Request` param on every rate-limited endpoint.
+"src/modules/users/user_router.py" = ["ARG001"]
+# FastAPI exception-handler / lifespan signatures require these unused params.
+"src/core/exception_handlers.py" = ["ARG001"]
+"src/lifespan.py" = ["ARG001"]
+# Enum member name, not a credential.
+"src/modules/users/models.py" = ["S105"]
+# Cookie *names* (not secrets) and SQLAlchemy TypeDecorator's required `dialect` param.
+"src/core/app_config.py" = ["S105"]
+"src/core/database.py" = ["ARG002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/"]
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/app.py", "alembic/*"]
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
