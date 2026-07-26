@@ -1,0 +1,131 @@
+version: 1
+disable_existing_loggers: false
+
+# ── Anchor: noisy third-party logger template ─────────────────────────
+_noisy: &noisy
+  level: WARNING
+  propagate: true
+
+# ── Formatters ───────────────────────────────────────────────────────
+# Each is a structlog `ProcessorFormatter` built by a factory function in
+# src/core/logger.py (same `(): ...` object-construction mechanism
+# dictConfig already uses for the filter below). Both render the same
+# "%(asctime)s [%(levelname)s] %(name)s: %(message)s" shape:
+#   - console_structlog: colored — development terminal only.
+#   - file_structlog: uncolored — development rotating files, and
+#     production's console (no file to render ANSI into either way).
+# Which of these are actually wired to a handler is decided by
+# `_load_dict_config()` in logger.py based on APP_ENV, not here.
+formatters:
+  console_structlog:
+    (): src.core.logger.build_console_formatter
+
+  file_structlog:
+    (): src.core.logger.build_plain_formatter
+
+  # Rich email format — includes full traceback context (plain stdlib
+  # formatter; SMTP alerts aren't part of the structlog pipeline).
+  email_formatter:
+    format: |
+      Time     : %(asctime)s
+      Level    : %(levelname)s
+      Logger   : %(name)s
+      File     : %(filename)s line %(lineno)d
+      Function : %(funcName)s
+      ----------------------------------------
+      %(message)s
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+# ── Filters ──────────────────────────────────────────────────────────
+filters:
+  exact_critical:
+    (): src.core.logger.ExactLevelFilter
+    level: 50                             # Only CRITICAL — not ERROR
+
+# ── Handlers ─────────────────────────────────────────────────────────
+# `_load_dict_config()` removes whichever of these don't apply to the
+# current environment before `dictConfig` ever sees this section, and
+# fills in `queue_handler.handlers` with the ones that remain.
+handlers:
+  # Development: colored terminal output.
+  console_dev:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: console_structlog
+    stream: ext://sys.stdout
+
+  # Development: everything, for local debugging.
+  app_file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: file_structlog
+    filename: logs/app.log
+    maxBytes: 10485760
+    backupCount: 5
+    encoding: utf-8
+
+  # Development: errors-only, for fast triage without scrolling app.log.
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: file_structlog
+    filename: logs/error.log
+    maxBytes: 10485760
+    backupCount: 5
+    encoding: utf-8
+
+  # Production: plain text on stdout — the only handler active in
+  # production. No local rotating files there: a container's filesystem
+  # is ephemeral and nobody is tailing it.
+  console_prod:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: file_structlog
+    stream: ext://sys.stdout
+
+  # Handler to send ALERT → Email (any environment, if SMTP is configured)
+  email:
+    class: logging.handlers.SMTPHandler
+    level: CRITICAL
+    formatter: email_formatter
+    filters: [exact_critical]          # Remove this line to also catch ERROR
+    mailhost:
+      - smtp.gmail.com                 # SMTP server host
+      - 587                            # TLS port (use 465 for SSL)
+    fromaddr: [FROM_EMAIL_ADDRESS]
+    toaddrs:
+      - [TO_EMAIL_ADDRESS]
+    subject: "[CRITICAL] %(name)s — %(message)s"
+    credentials:
+      - [SMTP_USER]                    # SMTP username
+      - [SMTP_PASSWORD]                # Use env var — see note below
+    secure: []                         # Empty list = use STARTTLS on port 587
+
+  # Fronts every handler above and is the *only* handler on the root
+  # logger. The handlers above each do real I/O (disk, SMTP) — running
+  # any of them directly on the thread handling an async request risks
+  # blocking it, so they instead run on a background QueueListener thread
+  # (built by dictConfig here, started explicitly in logger.py's
+  # setup_logging(), since dictConfig constructs but doesn't start it).
+  # Uses `PassthroughQueueHandler`, not the stock `QueueHandler` — see its
+  # docstring for why (breaks structlog's `ProcessorFormatter` otherwise).
+  # `handlers:` below is filled in by `_load_dict_config()`.
+  queue_handler:
+    class: src.core.logger.PassthroughQueueHandler
+    respect_handler_level: true
+    handlers: []
+
+# ── Noisy third-party loggers ─────────────────────────────────────────
+loggers:
+  httpx:                  *noisy
+  gunicorn:                *noisy
+  uvicorn:                 *noisy
+  uvicorn.access:
+    <<: *noisy
+    level: ERROR
+  sqlalchemy.engine:      *noisy
+
+# ── Root logger ───────────────────────────────────────────────────────
+root:
+  level: INFO
+  handlers: [queue_handler]
