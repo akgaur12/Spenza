@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Reset your Spenza password{% endblock %}
+{% block content %}
+  <!-- OTP:{{ otp }} -->
+  <p style="margin-top:0;">Hi {{ username }},</p>
+  <p>We received a request to reset your Spenza password. Use the code below to continue.</p>
+  <p style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;letter-spacing:6px;font-size:32px;font-weight:700;color:#111827;background-color:#f3f4f6;padding:16px 24px;border-radius:8px;">
+      {{ otp }}
+    </span>
+  </p>
+  <p>This code expires in <strong>{{ expires_in_minutes }} minutes</strong>. Do not share it with anyone.</p>
+  <p>If you didn't request a password reset, please ignore this email — your password will remain unchanged.</p>
+{% endblock %}
