@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     OTP_EXPIRE_MINUTES: int = 10
     OTP_MAX_ATTEMPTS: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_CLEANUP_INTERVAL_SECONDS: int = 7 * 24 * 3600  # weekly
 
     # ── Account lockout ────────────────────────────────────────────────
     LOGIN_MAX_FAILED_ATTEMPTS: int = 5

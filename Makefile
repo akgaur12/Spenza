@@ -1,4 +1,4 @@
-.PHONY: install dev run create-db migrate migrate-down migrate-new test test-cov lint format typecheck check seed promote-admin demote-admin precommit clean
+.PHONY: install dev run create-db migrate migrate-down migrate-new test test-cov lint format typecheck check seed promote-admin demote-admin cleanup-otps precommit clean
 
 install:
 	uv sync --all-groups
@@ -47,6 +47,9 @@ promote-admin:
 
 demote-admin:
 	uv run python -m scripts.seed --demote-admin $(EMAIL)
+
+cleanup-otps:
+	uv run python -m scripts.cleanup_otps
 
 precommit:
 	uv run pre-commit run --all-files

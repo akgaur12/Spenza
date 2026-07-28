@@ -7,7 +7,7 @@ rules, no HTTP concerns. `UserService` composes these to implement behavior.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.users.models import EmailOTP, OTPPurpose, RefreshSession, User, UserRole
@@ -152,6 +152,10 @@ class EmailOTPRepository:
 
     async def delete(self, otp: EmailOTP) -> None:
         await self._session.delete(otp)
+
+    async def delete_created_before(self, cutoff: datetime) -> int:
+        result = await self._session.execute(delete(EmailOTP).where(EmailOTP.created_at < cutoff))
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     async def flush(self) -> None:
         await self._session.flush()
