@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.app_config import settings
@@ -112,9 +113,13 @@ class UserService:
             user = existing_by_email
             user.username = data.username
             user.password_hash = password_hash
+            user.full_name = data.full_name
         else:
             user = self._users.create(
-                email=data.email, username=data.username, password_hash=password_hash
+                email=data.email,
+                username=data.username,
+                password_hash=password_hash,
+                full_name=data.full_name,
             )
         await self._users.flush()
 
@@ -166,7 +171,7 @@ class UserService:
             return user
 
         otp = await self._consume_otp(user, purpose=OTPPurpose.SIGNUP, raw_otp=data.otp)
-        otp.verified = True
+        await self._otps.delete(otp)
         user.is_verified = True
         await self._users.flush()
 
@@ -193,8 +198,10 @@ class UserService:
             user.locked_until = datetime.now(UTC) + lockout
         await self._users.flush()
 
-    async def authenticate(self, *, email: str, password: str) -> User:
-        user = await self._users.get_by_email(email)
+    async def authenticate(self, *, identifier: str, password: str) -> User:
+        user = await self._users.get_by_email(identifier) or await self._users.get_by_username(
+            identifier
+        )
         if user is None:
             raise InvalidCredentialsError()
 
@@ -415,3 +422,45 @@ class UserService:
         user = await self.get_user_by_id(user_id)
         await self._users.delete(user)
         logger.info("admin.user.deleted", user_id=str(user.id))
+
+
+# ── Maintenance ───────────────────────────────────────────────────────────
+
+
+# Arbitrary, stable key namespacing this job's Postgres advisory lock. Pick a
+# new constant for each future scheduled job so they don't collide.
+_OTP_CLEANUP_LOCK_KEY = 727_001
+
+
+async def cleanup_expired_otps(session: AsyncSession) -> int:
+    """Delete `email_otps` rows old enough that neither the OTP itself nor
+    any `reset_token` derived from it could still be valid, and commit.
+
+    A verified password-reset OTP survives until `reset-password` completes,
+    and its `reset_token` is minted with a *fresh* `OTP_EXPIRE_MINUTES`
+    window starting at verification time — later than the OTP row's own
+    `expires_at`. Doubling the retention window (measured from `created_at`)
+    guarantees this never deletes a row whose `reset_token` could still be
+    redeemed. Called from `scripts/cleanup_otps.py` and the weekly
+    background task in `src/lifespan.py`.
+
+    Guarded by a Postgres advisory lock scoped to the current transaction:
+    with more than one worker process (or an external cron firing at the
+    same moment as the in-app task), only the caller that acquires the lock
+    runs the sweep — everyone else returns 0 immediately instead of racing
+    the same DELETE. No-op on SQLite (the test suite's dialect), which has
+    no advisory locks and no concurrent workers to guard against.
+    """
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        acquired = await session.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": _OTP_CLEANUP_LOCK_KEY}
+        )
+        if not acquired:
+            logger.info("otp_cleanup.skipped_lock_held")
+            await session.commit()
+            return 0
+
+    cutoff = datetime.now(UTC) - timedelta(minutes=settings.OTP_EXPIRE_MINUTES * 2)
+    deleted = await EmailOTPRepository(session).delete_created_before(cutoff)
+    await session.commit()
+    return deleted

@@ -127,7 +127,7 @@ async def login(
     user_service: Annotated[UserService, Depends(get_user_service)],
     device_ctx: Annotated[DeviceContext, Depends(get_device_context)],
 ) -> SuccessResponse[UserPublic]:
-    user = await user_service.authenticate(email=data.email, password=data.password)
+    user = await user_service.authenticate(identifier=data.identifier, password=data.password)
     tokens = await user_service.issue_token_pair(user, device_ctx)
     _set_auth_cookies(response, tokens)
     return SuccessResponse(message="Login successful", data=UserPublic.model_validate(user))
@@ -146,7 +146,7 @@ async def login_json(
     user_service: Annotated[UserService, Depends(get_user_service)],
     device_ctx: Annotated[DeviceContext, Depends(get_device_context)],
 ) -> SuccessResponse[TokenPair]:
-    user = await user_service.authenticate(email=data.email, password=data.password)
+    user = await user_service.authenticate(identifier=data.identifier, password=data.password)
     tokens = await user_service.issue_token_pair(user, device_ctx)
     _set_auth_cookies(response, tokens)
     return SuccessResponse(

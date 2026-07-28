@@ -15,6 +15,7 @@ class SignupRequest(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=30)
     password: str = Field(..., min_length=8, max_length=128)
+    full_name: str | None = Field(default=None, max_length=150)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -22,6 +23,7 @@ class SignupRequest(BaseModel):
                 "email": "jane.doe@example.com",
                 "username": "jane_doe",
                 "password": "SecureP@ssw0rd!",
+                "full_name": "Jane Doe",
             }
         }
     )
@@ -56,12 +58,17 @@ class ResendOTPRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    identifier: str = Field(
+        ...,
+        min_length=3,
+        max_length=255,
+        description="Email address or username",
+    )
     password: str = Field(..., min_length=1, max_length=128)
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {"email": "jane.doe@example.com", "password": "SecureP@ssw0rd!"}
+            "example": {"identifier": "jane.doe@example.com", "password": "SecureP@ssw0rd!"}
         }
     )
 
