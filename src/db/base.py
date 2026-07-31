@@ -4,6 +4,7 @@ themselves on `Base.metadata`.
 """
 
 from src.core.database import Base
+from src.modules.categories.models import Category
 from src.modules.users.models import EmailOTP, RefreshSession, User
 
-__all__ = ["Base", "EmailOTP", "RefreshSession", "User"]
+__all__ = ["Base", "Category", "EmailOTP", "RefreshSession", "User"]
