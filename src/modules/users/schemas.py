@@ -92,8 +92,11 @@ class UserPublic(BaseModel):
     is_active: bool
 
 
-class UserProfile(UserPublic):
+class UserMe(UserPublic):
     full_name: str | None
+
+
+class UserProfile(UserMe):
     created_at: datetime
     updated_at: datetime
 

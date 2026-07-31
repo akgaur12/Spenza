@@ -57,6 +57,8 @@ Dual-token, cookie-based — the "stay signed in like ChatGPT/Claude" pattern:
 - Password change or reset revokes **all** sessions immediately, forcing
   re-login — access tokens are checked against their session's revocation
   state on every request, not just at expiry.
+- `/login` and `/login-json` accept either an email or a username in the
+  same `identifier` field — whichever the user types.
 
 ### Admin access
 
@@ -129,6 +131,7 @@ Set `EMAIL_BACKEND=smtp` with real Gmail SMTP credentials for production.
 | `make seed`                    | Seed demo accounts                         |
 | `make promote-admin EMAIL=...` | Promote an existing user to the admin role |
 | `make demote-admin EMAIL=...`  | Demote an admin back to a regular user     |
+| `make cleanup-otps`            | Delete stale/abandoned `email_otps` rows   |
 | `make test`                    | Run the test suite                         |
 | `make test-cov`                | Run tests with coverage report (90% gate)  |
 | `make lint`                    | `ruff check`                               |
@@ -184,6 +187,30 @@ coverage: **~93%** (gate is 90%, configured in `pyproject.toml`).
 - Rate limiting (`slowapi`) on signup/login/OTP endpoints.
 - `TrustedHostMiddleware`, security response headers, per-request ID.
 - Never logs passwords, OTPs, or raw tokens — only hashes/IDs/booleans.
+
+## OTP housekeeping
+
+An OTP row is only deleted automatically as a side effect of two flows: a
+signup OTP the moment it's verified, and a password-reset OTP once
+`reset-password` completes. Anything else — never verified, expired, or a
+verified reset OTP whose owner never finished resetting — sits in
+`email_otps` forever otherwise. Rows older than `2 × OTP_EXPIRE_MINUTES`
+are considered safe to delete (see `cleanup_expired_otps` in
+`src/modules/users/service.py` for why the window is doubled).
+
+Two independent mechanisms handle this, deliberately overlapping:
+
+- **In-app weekly task** (`src/lifespan.py`) — every running process sweeps
+  automatically every 7 days, no setup needed. Caveat: it's a plain
+  `asyncio.sleep` timer that resets on every restart, so if the process
+  redeploys more often than weekly, this may rarely fire in practice.
+- **External scheduler** (`make cleanup-otps` / `scripts/cleanup_otps.py`) —
+  doesn't depend on process uptime. Wire it into cron, a systemd timer, or
+  your hosting provider's scheduled-job feature, e.g.:
+
+```bash
+0 3 * * 0 cd /path/to/spenza && make cleanup-otps >> /var/log/spenza-otp-cleanup.log 2>&1
+```
 
 ## Notes on local dev database
 

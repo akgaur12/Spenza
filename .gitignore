@@ -18,9 +18,28 @@ wheels/
 logs/
 *.log
 
+# IDE files
+.vscode/
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
 # Test / lint / type-check caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# compressed files
+*.tar
+*.zip
+*.rar
+
+# other files & dir
+bruno/
+postman/
+docs/
+notebooks/
+

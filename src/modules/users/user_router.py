@@ -24,6 +24,7 @@ from src.modules.users.schemas import (
     TokenPair,
     UpdateProfileRequest,
     UpdateUsernameRequest,
+    UserMe,
     UserProfile,
     UserPublic,
     VerifyResetOTPRequest,
@@ -209,11 +210,11 @@ async def logout_all_devices(
 
 @user_router.get(
     "/me",
-    response_model=SuccessResponse[UserPublic],
+    response_model=SuccessResponse[UserMe],
     summary="Get the currently authenticated user's identity",
 )
-async def get_me(current_user: CurrentUser) -> SuccessResponse[UserPublic]:
-    return SuccessResponse(message="OK", data=UserPublic.model_validate(current_user))
+async def get_me(current_user: CurrentUser) -> SuccessResponse[UserMe]:
+    return SuccessResponse(message="OK", data=UserMe.model_validate(current_user))
 
 
 # ── Password management ──────────────────────────────────────────────────
