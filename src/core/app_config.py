@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     APP_ENV: Literal["dev", "test", "prod"] = "prod"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+    # There is no per-user timezone preference yet, so every user's
+    # "today"/"this week"/"this month"/"this year" boundaries (e.g. in the
+    # dashboard) are computed in this single application-wide zone.
+    APP_TIMEZONE: str = "Asia/Kolkata"
 
     # ── Server ─────────────────────────────────────────────────────────
     HOST: str = "0.0.0.0"  # noqa: S104
