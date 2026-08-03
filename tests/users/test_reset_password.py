@@ -62,6 +62,14 @@ async def test_verify_reset_otp_wrong_code_rejected(
     assert response.json()["error_code"] == "INVALID_OTP"
 
 
+async def test_verify_reset_otp_unknown_email_rejected(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/users/verify-reset-otp", json={"email": "nobody@example.com", "otp": "000000"}
+    )
+    assert response.status_code == 404
+    assert response.json()["error_code"] == "USER_NOT_FOUND"
+
+
 async def test_reset_password_rejects_reused_reset_token(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:

@@ -26,10 +26,11 @@ async def test_forgot_password_sends_otp_for_existing_user(
     assert email_backend.sent[0]["subject"] == "Reset your Spenza password"
 
 
-async def test_forgot_password_unknown_email_does_not_leak_existence(
+async def test_forgot_password_unknown_email_is_rejected(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:
     response = await client.post("/api/users/forgot-password", json={"email": "nobody@example.com"})
 
-    assert response.status_code == 200
+    assert response.status_code == 404
+    assert response.json()["error_code"] == "USER_NOT_FOUND"
     assert len(email_backend.sent) == 0

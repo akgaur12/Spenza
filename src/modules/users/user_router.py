@@ -13,11 +13,13 @@ from src.modules.users.dependencies import (
     get_user_service,
 )
 from src.modules.users.exceptions import InvalidRefreshTokenError
+from src.modules.users.models import OTPPurpose
 from src.modules.users.schemas import (
     ChangePasswordRequest,
     DeleteUserRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    ResendOTPRequest,
     ResetPasswordRequest,
     ResetTokenResponse,
     SignupRequest,
@@ -109,6 +111,23 @@ async def verify_signup_otp(
     return SuccessResponse(
         message="Email verified. Your account is now active.",
         data=UserPublic.model_validate(user),
+    )
+
+
+@user_router.post(
+    "/resend-otp",
+    response_model=SuccessResponse[None],
+    summary="Resend the signup verification OTP",
+)
+@limiter.limit(settings.RATE_LIMIT_OTP)
+async def resend_otp(
+    request: Request,
+    data: ResendOTPRequest,
+    user_service: Annotated[UserService, Depends(get_user_service)],
+) -> SuccessResponse[None]:
+    await user_service.resend_otp(data.email, purpose=OTPPurpose.SIGNUP)
+    return SuccessResponse(
+        message="If an account with that email exists, a new OTP has been sent."
     )
 
 
@@ -232,9 +251,7 @@ async def forgot_password(
     user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> SuccessResponse[None]:
     await user_service.forgot_password(data.email)
-    return SuccessResponse(
-        message="If an account with that email exists, a reset OTP has been sent."
-    )
+    return SuccessResponse(message="Reset OTP sent.")
 
 
 @user_router.post(

@@ -44,6 +44,7 @@ from src.modules.users.exceptions import (
     InvalidResetTokenError,
     OTPAttemptsExceededError,
     OTPExpiredError,
+    OTPResendCooldownError,
     RefreshTokenExpiredError,
     RefreshTokenRevokedError,
     UsernameAlreadyExistsError,
@@ -179,6 +180,26 @@ class UserService:
         logger.info("user.signup.verified", user_id=str(user.id))
         return user
 
+    async def resend_otp(self, email: str, *, purpose: OTPPurpose) -> None:
+        user = await self._users.get_by_email(email)
+        if user is None:
+            logger.info("user.resend_otp.unknown_email")
+            return
+        if purpose is OTPPurpose.SIGNUP and user.is_verified:
+            return
+
+        latest = await self._otps.get_latest_pending(user.id, purpose)
+        if latest is not None:
+            cooldown_until = latest.created_at + timedelta(
+                seconds=settings.OTP_RESEND_COOLDOWN_SECONDS
+            )
+            if datetime.now(UTC) < cooldown_until:
+                raise OTPResendCooldownError()
+            await self._otps.delete(latest)
+
+        await self._issue_otp(user, purpose=purpose)
+        logger.info("user.resend_otp.sent", user_id=str(user.id))
+
     # ── Login / tokens ───────────────────────────────────────────────────
 
     async def _check_login_eligibility(self, user: User) -> None:
@@ -305,8 +326,10 @@ class UserService:
 
     async def forgot_password(self, email: str) -> None:
         user = await self._users.get_by_email(email)
-        if user is None or not user.is_active:
-            logger.info("user.forgot_password.unknown_email")
+        if user is None:
+            raise UserNotFoundError()
+        if not user.is_active:
+            logger.info("user.forgot_password.inactive_account", user_id=str(user.id))
             return
         await self._issue_otp(user, purpose=OTPPurpose.PASSWORD_RESET)
         logger.info("user.forgot_password.otp_sent", user_id=str(user.id))
@@ -314,7 +337,7 @@ class UserService:
     async def verify_reset_otp(self, data: VerifyResetOTPRequest) -> tuple[str, int]:
         user = await self._users.get_by_email(data.email)
         if user is None:
-            raise InvalidOTPError()
+            raise UserNotFoundError()
 
         otp = await self._consume_otp(user, purpose=OTPPurpose.PASSWORD_RESET, raw_otp=data.otp)
         otp.verified = True
