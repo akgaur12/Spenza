@@ -20,11 +20,13 @@ from src.core.exception_handlers import register_exception_handlers  # noqa: E40
 from src.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware  # noqa: E402
 from src.core.rate_limit import limiter  # noqa: E402
 from src.lifespan import lifespan  # noqa: E402
+from src.modules.analytics.router import analytics_router  # noqa: E402
 from src.modules.categories.admin_router import admin_category_router  # noqa: E402
 from src.modules.categories.router import category_router  # noqa: E402
 from src.modules.dashboard.router import dashboard_router  # noqa: E402
 from src.modules.expenses.router import expense_router  # noqa: E402
 from src.modules.health.router import health_router  # noqa: E402
+from src.modules.import_export.router import export_router, import_router  # noqa: E402
 from src.modules.users.admin_router import admin_router  # noqa: E402
 from src.modules.users.user_router import user_router  # noqa: E402
 
@@ -70,6 +72,9 @@ def create_app() -> FastAPI:
     app.include_router(admin_category_router)
     app.include_router(expense_router)
     app.include_router(dashboard_router)
+    app.include_router(analytics_router)
+    app.include_router(import_router)
+    app.include_router(export_router)
     app.include_router(health_router)
 
     @app.get("/", include_in_schema=False)

@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     # LOG_TO_FILE=true in prod to also write logs/app.log + logs/error.log.
     LOG_TO_FILE: bool | None = None
 
+    # ── Import / Export ────────────────────────────────────────────────
+    MAX_IMPORT_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
+    MAX_IMPORT_ROWS: int = 10_000
+    IMPORT_SESSION_EXPIRE_MINUTES: int = 30
+    MAX_EXPORT_ROWS: int = 50_000
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins_list(self) -> list[str]:

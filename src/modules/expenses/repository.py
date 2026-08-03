@@ -95,6 +95,42 @@ class ExpenseRepository:
             conditions.append(func.lower(Expense.description).like(f"%{search.lower()}%"))
         return conditions
 
+    async def list_for_export(
+        self,
+        user_id: uuid.UUID,
+        *,
+        category_id: uuid.UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        min_amount: Decimal | None = None,
+        max_amount: Decimal | None = None,
+        search: str | None = None,
+        limit: int = 50_000,
+    ) -> list[Expense]:
+        """All matching expenses, oldest spending first — the chronological
+        order reports/spreadsheets want, unlike `list_for_user`'s
+        newest-first history view. Capped by `limit` (see
+        `settings.MAX_EXPORT_ROWS`) rather than paginated, since an export is
+        a single file, not a paged UI.
+        """
+        conditions = self._build_conditions(
+            user_id,
+            category_id=category_id,
+            start_date=start_date,
+            end_date=end_date,
+            min_amount=min_amount,
+            max_amount=max_amount,
+            search=search,
+        )
+        result = await self._session.execute(
+            select(Expense)
+            .where(*conditions)
+            .options(selectinload(Expense.category))
+            .order_by(Expense.spent_at.asc(), Expense.created_at.asc(), Expense.id.asc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     def create(
         self,
         *,

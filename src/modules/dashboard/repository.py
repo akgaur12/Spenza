@@ -8,27 +8,15 @@ never loading a user's expenses into Python to compute totals by hand.
 
 import uuid
 from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.core.money import to_money
 from src.modules.categories.models import Category
 from src.modules.expenses.models import Expense
-
-_CENTS = Decimal("0.01")
-
-
-def _to_money(value: object) -> Decimal:
-    """Coerce a raw `SUM()` result (`None`, `int`, `float`, or `Decimal`,
-    depending on dialect) into a clean 2-decimal-place `Decimal`, rounding
-    away any floating-point aggregation noise SQLite introduces (PostgreSQL's
-    `NUMERIC` sum is already exact).
-    """
-    if value is None:
-        return Decimal("0.00")
-    return Decimal(str(value)).quantize(_CENTS, rounding=ROUND_HALF_UP)
 
 
 class DashboardRepository:
@@ -48,7 +36,7 @@ class DashboardRepository:
                 )
             )
         ).one()
-        return _to_money(total), count or 0
+        return to_money(total), count or 0
 
     async def get_top_category(
         self, user_id: uuid.UUID, start: datetime, end: datetime
@@ -77,7 +65,7 @@ class DashboardRepository:
         if row is None:
             return None
         category, total, count = row
-        return category, _to_money(total), count
+        return category, to_money(total), count
 
     async def get_largest_expense(
         self, user_id: uuid.UUID, start: datetime, end: datetime

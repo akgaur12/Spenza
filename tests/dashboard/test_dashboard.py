@@ -11,16 +11,16 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.core.timezone import APP_TIMEZONE
-from src.modules.dashboard.service import (
-    _days_elapsed,
-    _months_elapsed_in_year,
-    _start_of_day,
-    _start_of_month,
-    _start_of_previous_month,
-    _start_of_week,
-    _start_of_year,
+from src.core.periods import (
+    days_elapsed,
+    months_elapsed_in_year,
+    start_of_day,
+    start_of_month,
+    start_of_previous_month,
+    start_of_week,
+    start_of_year,
 )
+from src.core.timezone import APP_TIMEZONE
 from tests.conftest import RecordingEmailBackend, promote_to_admin, register_verified_user
 
 USER_A = {"email": "user.a@example.com", "password": "SecureP@ss1"}
@@ -227,7 +227,7 @@ async def test_today_total_and_count(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     now_local = _now_local()
-    today_start = _start_of_day(now_local)
+    today_start = start_of_day(now_local)
 
     await _create_expense(client, category_id=food_id, spent_at=today_start, amount="100.00")
     await _create_expense(
@@ -253,7 +253,7 @@ async def test_yesterdays_expenses_excluded_from_today(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    yesterday_end = _start_of_day(_now_local()) - timedelta(seconds=1)
+    yesterday_end = start_of_day(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=yesterday_end, amount="999.00")
 
@@ -271,7 +271,7 @@ async def test_week_total_count_and_daily_average(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     now_local = _now_local()
-    week_start = _start_of_week(now_local)
+    week_start = start_of_week(now_local)
 
     await _create_expense(client, category_id=food_id, spent_at=week_start, amount="1000.00")
     await _create_expense(
@@ -282,11 +282,11 @@ async def test_week_total_count_and_daily_average(
     )
 
     data = await _get_dashboard(client)
-    days_elapsed = _days_elapsed(week_start, _start_of_day(now_local))
+    elapsed = days_elapsed(week_start, start_of_day(now_local))
 
     assert data["this_week"]["total"] == "3250.00"
     assert data["this_week"]["expense_count"] == 2
-    assert data["this_week"]["daily_average"] == _divide(Decimal("3250.00"), days_elapsed)
+    assert data["this_week"]["daily_average"] == _divide(Decimal("3250.00"), elapsed)
 
 
 async def test_previous_week_expenses_excluded(
@@ -294,7 +294,7 @@ async def test_previous_week_expenses_excluded(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    before_week = _start_of_week(_now_local()) - timedelta(seconds=1)
+    before_week = start_of_week(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=before_week, amount="500.00")
 
@@ -308,7 +308,7 @@ async def test_week_boundary_is_monday(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    week_start = _start_of_week(_now_local())
+    week_start = start_of_week(_now_local())
 
     # Monday 00:00:00 itself belongs to this week...
     await _create_expense(client, category_id=food_id, spent_at=week_start, amount="10.00")
@@ -334,7 +334,7 @@ async def test_month_total_count_daily_average_and_average_expense(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     now_local = _now_local()
-    month_start = _start_of_month(now_local)
+    month_start = start_of_month(now_local)
 
     await _create_expense(client, category_id=food_id, spent_at=month_start, amount="1000.00")
     await _create_expense(
@@ -345,11 +345,11 @@ async def test_month_total_count_daily_average_and_average_expense(
     )
 
     data = await _get_dashboard(client)
-    days_elapsed = _days_elapsed(month_start, _start_of_day(now_local))
+    elapsed = days_elapsed(month_start, start_of_day(now_local))
 
     assert data["this_month"]["total"] == "1500.00"
     assert data["this_month"]["expense_count"] == 2
-    assert data["this_month"]["daily_average"] == _divide(Decimal("1500.00"), days_elapsed)
+    assert data["this_month"]["daily_average"] == _divide(Decimal("1500.00"), elapsed)
     assert data["this_month"]["average_expense"] == _divide(Decimal("1500.00"), 2)
 
 
@@ -358,7 +358,7 @@ async def test_previous_months_expenses_excluded_from_this_month(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    before_month = _start_of_month(_now_local()) - timedelta(seconds=1)
+    before_month = start_of_month(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=before_month, amount="500.00")
 
@@ -377,7 +377,7 @@ async def test_year_total_count_monthly_average_and_average_expense(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     now_local = _now_local()
-    year_start = _start_of_year(now_local)
+    year_start = start_of_year(now_local)
 
     await _create_expense(client, category_id=food_id, spent_at=year_start, amount="3000.00")
     await _create_expense(
@@ -388,7 +388,7 @@ async def test_year_total_count_monthly_average_and_average_expense(
     )
 
     data = await _get_dashboard(client)
-    months_elapsed = _months_elapsed_in_year(now_local)
+    months_elapsed = months_elapsed_in_year(now_local)
 
     assert data["this_year"]["total"] == "4000.00"
     assert data["this_year"]["expense_count"] == 2
@@ -401,7 +401,7 @@ async def test_previous_years_expenses_excluded_from_this_year(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    before_year = _start_of_year(_now_local()) - timedelta(seconds=1)
+    before_year = start_of_year(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=before_year, amount="500.00")
 
@@ -418,8 +418,8 @@ async def test_previous_month_total_and_count(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
-    previous_month_start = _start_of_previous_month(month_start)
+    month_start = start_of_month(_now_local())
+    previous_month_start = start_of_previous_month(month_start)
 
     await _create_expense(
         client, category_id=food_id, spent_at=previous_month_start, amount="1620.00"
@@ -446,18 +446,18 @@ async def test_previous_month_total_and_count(
 
 def test_previous_month_handles_january_to_december_rollover() -> None:
     january = datetime(2027, 1, 15, 10, 0, 0, tzinfo=APP_TIMEZONE)
-    month_start = _start_of_month(january)
+    month_start = start_of_month(january)
 
-    previous_month_start = _start_of_previous_month(month_start)
+    previous_month_start = start_of_previous_month(month_start)
 
     assert previous_month_start == datetime(2026, 12, 1, tzinfo=APP_TIMEZONE)
 
 
 def test_start_of_previous_month_normal_case() -> None:
     july = datetime(2026, 7, 20, tzinfo=APP_TIMEZONE)
-    month_start = _start_of_month(july)
+    month_start = start_of_month(july)
 
-    assert _start_of_previous_month(month_start) == datetime(2026, 6, 1, tzinfo=APP_TIMEZONE)
+    assert start_of_previous_month(month_start) == datetime(2026, 6, 1, tzinfo=APP_TIMEZONE)
 
 
 # ── Month comparison ─────────────────────────────────────────────────────
@@ -468,8 +468,8 @@ async def test_month_comparison_spending_increased(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
-    previous_month_start = _start_of_previous_month(month_start)
+    month_start = start_of_month(_now_local())
+    previous_month_start = start_of_previous_month(month_start)
 
     await _create_expense(
         client, category_id=food_id, spent_at=previous_month_start, amount="16200.00"
@@ -487,8 +487,8 @@ async def test_month_comparison_spending_decreased(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
-    previous_month_start = _start_of_previous_month(month_start)
+    month_start = start_of_month(_now_local())
+    previous_month_start = start_of_previous_month(month_start)
 
     await _create_expense(
         client, category_id=food_id, spent_at=previous_month_start, amount="18450.00"
@@ -505,8 +505,8 @@ async def test_month_comparison_spending_unchanged(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
-    previous_month_start = _start_of_previous_month(month_start)
+    month_start = start_of_month(_now_local())
+    previous_month_start = start_of_previous_month(month_start)
 
     await _create_expense(
         client, category_id=food_id, spent_at=previous_month_start, amount="5000.00"
@@ -537,7 +537,7 @@ async def test_month_comparison_previous_zero_current_positive(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _create_expense(client, category_id=food_id, spent_at=month_start, amount="500.00")
 
@@ -557,7 +557,7 @@ async def test_top_category_selected_with_correct_totals_and_percentage(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     transport_id = await _category_id_by_name(client, "Transport")
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _create_expense(client, category_id=food_id, spent_at=month_start, amount="11950.00")
     await _create_expense(
@@ -586,7 +586,7 @@ async def test_top_category_works_for_personal_category(
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     freelance_id = await _create_category(client, "Freelance Tools")
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _create_expense(client, category_id=food_id, spent_at=month_start, amount="100.00")
     await _create_expense(
@@ -607,7 +607,7 @@ async def test_top_category_works_for_personal_category(
 async def test_top_category_excludes_other_users_expenses(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
@@ -630,7 +630,7 @@ async def test_top_category_null_when_no_expenses_this_month(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    before_month = _start_of_month(_now_local()) - timedelta(seconds=1)
+    before_month = start_of_month(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=before_month, amount="500.00")
 
@@ -646,7 +646,7 @@ async def test_largest_expense_selected_with_category(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _create_expense(
         client,
@@ -674,7 +674,7 @@ async def test_largest_expense_selected_with_category(
 async def test_largest_expense_excludes_other_users_expenses(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
@@ -696,7 +696,7 @@ async def test_largest_expense_null_when_no_expenses_this_month(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    before_month = _start_of_month(_now_local()) - timedelta(seconds=1)
+    before_month = start_of_month(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(client, category_id=food_id, spent_at=before_month, amount="500.00")
 
@@ -709,7 +709,7 @@ async def test_largest_expense_tie_is_deterministic(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    month_start = _start_of_month(_now_local())
+    month_start = start_of_month(_now_local())
 
     first = await _create_expense(
         client,
@@ -760,7 +760,7 @@ async def test_expense_at_exact_local_midnight_counts_as_today(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    midnight = _start_of_day(_now_local())
+    midnight = start_of_day(_now_local())
 
     await _create_expense(client, category_id=food_id, spent_at=midnight, amount="42.00")
 
@@ -773,7 +773,7 @@ async def test_expense_one_second_before_midnight_excluded_from_today(
 ) -> None:
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
-    just_before_midnight = _start_of_day(_now_local()) - timedelta(seconds=1)
+    just_before_midnight = start_of_day(_now_local()) - timedelta(seconds=1)
 
     await _create_expense(
         client, category_id=food_id, spent_at=just_before_midnight, amount="42.00"
@@ -789,7 +789,7 @@ async def test_expense_one_second_before_midnight_excluded_from_today(
 def test_start_of_week_is_monday_for_any_weekday() -> None:
     for day in range(1, 8):  # 2026-06-01 was a Monday
         dt = datetime(2026, 6, day, 15, 30, tzinfo=APP_TIMEZONE)
-        start = _start_of_week(dt)
+        start = start_of_week(dt)
         assert start.weekday() == 0
         assert start.time().isoformat() == "00:00:00"
         assert start <= dt
@@ -797,8 +797,8 @@ def test_start_of_week_is_monday_for_any_weekday() -> None:
 
 def test_start_of_month_and_year() -> None:
     dt = datetime(2026, 7, 31, 23, 59, tzinfo=APP_TIMEZONE)
-    assert _start_of_month(dt) == datetime(2026, 7, 1, tzinfo=APP_TIMEZONE)
-    assert _start_of_year(dt) == datetime(2026, 1, 1, tzinfo=APP_TIMEZONE)
+    assert start_of_month(dt) == datetime(2026, 7, 1, tzinfo=APP_TIMEZONE)
+    assert start_of_year(dt) == datetime(2026, 1, 1, tzinfo=APP_TIMEZONE)
 
 
 def test_days_elapsed_counts_today_as_day_one() -> None:
@@ -806,11 +806,11 @@ def test_days_elapsed_counts_today_as_day_one() -> None:
     same_day = datetime(2026, 7, 1, 18, 0, tzinfo=APP_TIMEZONE)
     ten_days_later = datetime(2026, 7, 10, 9, 0, tzinfo=APP_TIMEZONE)
 
-    assert _days_elapsed(start, same_day) == 1
-    assert _days_elapsed(start, ten_days_later) == 10
+    assert days_elapsed(start, same_day) == 1
+    assert days_elapsed(start, ten_days_later) == 10
 
 
 def test_months_elapsed_in_year_is_the_current_month_number() -> None:
-    assert _months_elapsed_in_year(datetime(2026, 7, 10, tzinfo=APP_TIMEZONE)) == 7
-    assert _months_elapsed_in_year(datetime(2026, 1, 1, tzinfo=APP_TIMEZONE)) == 1
-    assert _months_elapsed_in_year(datetime(2026, 12, 31, tzinfo=APP_TIMEZONE)) == 12
+    assert months_elapsed_in_year(datetime(2026, 7, 10, tzinfo=APP_TIMEZONE)) == 7
+    assert months_elapsed_in_year(datetime(2026, 1, 1, tzinfo=APP_TIMEZONE)) == 1
+    assert months_elapsed_in_year(datetime(2026, 12, 31, tzinfo=APP_TIMEZONE)) == 12

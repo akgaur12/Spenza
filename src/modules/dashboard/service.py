@@ -7,9 +7,9 @@ before querying, since `Expense.spent_at` is stored and compared as
 UTC-aware `TIMESTAMPTZ`. Boundaries are half-open `[start, end)` ranges so
 they can be compared directly without `23:59:59.999999` fudging.
 
-The small `_start_of_*`/`_days_elapsed`/`_months_elapsed_in_year` helpers are
-plain, dependency-free functions so they can be unit tested against
-synthetic "now" values without needing a database or the real wall clock.
+Calendar-boundary math (start of day/week/month/year, ...) lives in
+`src.core.periods`, shared with the `analytics` module so both features
+bucket time identically.
 """
 
 from dataclasses import dataclass
@@ -19,6 +19,15 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.periods import (
+    days_elapsed,
+    months_elapsed_in_year,
+    start_of_day,
+    start_of_month,
+    start_of_previous_month,
+    start_of_week,
+    start_of_year,
+)
 from src.core.timezone import APP_TIMEZONE
 from src.modules.categories.models import Category
 from src.modules.dashboard.repository import DashboardRepository
@@ -41,39 +50,6 @@ _CENTS = Decimal("0.01")
 _PERCENT = Decimal("0.01")
 
 
-def _start_of_day(dt: datetime) -> datetime:
-    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def _start_of_week(dt: datetime) -> datetime:
-    """Monday 00:00 of `dt`'s week."""
-    start_of_today = _start_of_day(dt)
-    return start_of_today - timedelta(days=start_of_today.weekday())
-
-
-def _start_of_month(dt: datetime) -> datetime:
-    return _start_of_day(dt).replace(day=1)
-
-
-def _start_of_year(dt: datetime) -> datetime:
-    return _start_of_day(dt).replace(month=1, day=1)
-
-
-def _start_of_previous_month(start_of_month: datetime) -> datetime:
-    if start_of_month.month == 1:
-        return start_of_month.replace(year=start_of_month.year - 1, month=12)
-    return start_of_month.replace(month=start_of_month.month - 1)
-
-
-def _days_elapsed(start_of_period: datetime, now: datetime) -> int:
-    """Days elapsed in an in-progress period, counting today as day 1."""
-    return (now.date() - start_of_period.date()).days + 1
-
-
-def _months_elapsed_in_year(now: datetime) -> int:
-    return now.month
-
-
 @dataclass(frozen=True)
 class _Boundaries:
     now_utc: datetime
@@ -89,11 +65,11 @@ class _Boundaries:
 
 
 def _compute_boundaries(now_local: datetime) -> _Boundaries:
-    today_start_local = _start_of_day(now_local)
-    week_start_local = _start_of_week(now_local)
-    month_start_local = _start_of_month(now_local)
-    year_start_local = _start_of_year(now_local)
-    previous_month_start_local = _start_of_previous_month(month_start_local)
+    today_start_local = start_of_day(now_local)
+    week_start_local = start_of_week(now_local)
+    month_start_local = start_of_month(now_local)
+    year_start_local = start_of_year(now_local)
+    previous_month_start_local = start_of_previous_month(month_start_local)
 
     return _Boundaries(
         now_utc=now_local.astimezone(UTC),
@@ -103,9 +79,9 @@ def _compute_boundaries(now_local: datetime) -> _Boundaries:
         month_start=month_start_local.astimezone(UTC),
         year_start=year_start_local.astimezone(UTC),
         previous_month_start=previous_month_start_local.astimezone(UTC),
-        days_elapsed_week=_days_elapsed(week_start_local, today_start_local),
-        days_elapsed_month=_days_elapsed(month_start_local, today_start_local),
-        months_elapsed_year=_months_elapsed_in_year(now_local),
+        days_elapsed_week=days_elapsed(week_start_local, today_start_local),
+        days_elapsed_month=days_elapsed(month_start_local, today_start_local),
+        months_elapsed_year=months_elapsed_in_year(now_local),
     )
 
 
