@@ -78,7 +78,7 @@ async def _create_expense(
     return data
 
 
-async def _list_expenses(client: AsyncClient, **params: str | int) -> dict[str, Any]:
+async def _list_expenses(client: AsyncClient, **params: str | int | list[str]) -> dict[str, Any]:
     response = await client.get("/api/v1/expenses", params=params)
     assert response.status_code == 200, response.text
     data: dict[str, Any] = response.json()["data"]
@@ -428,6 +428,22 @@ async def test_filter_by_category(
     listing = await _list_expenses(client, category_id=food_id)
 
     assert [item["description"] for item in listing["items"]] == ["Lunch"]
+
+
+async def test_filter_by_multiple_categories(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await _login_user_a(client, email_backend)
+    food_id = await _category_id_by_name(client, "Food")
+    transport_id = await _category_id_by_name(client, "Transport")
+    rent_id = await _category_id_by_name(client, "Rent")
+    await _create_expense(client, category_id=food_id, description="Lunch")
+    await _create_expense(client, category_id=transport_id, description="Uber")
+    await _create_expense(client, category_id=rent_id, description="Rent")
+
+    listing = await _list_expenses(client, category_id=[food_id, transport_id])
+
+    assert {item["description"] for item in listing["items"]} == {"Lunch", "Uber"}
 
 
 async def test_filter_by_start_date(

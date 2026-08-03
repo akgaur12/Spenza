@@ -36,7 +36,12 @@ expense_router = APIRouter(prefix="/api/v1/expenses", tags=["expenses"])
 async def list_expenses(
     current_user: CurrentUser,
     expense_service: Annotated[ExpenseService, Depends(get_expense_service)],
-    category_id: Annotated[uuid.UUID | None, Query()] = None,
+    category_id: Annotated[
+        list[uuid.UUID] | None,
+        Query(
+            description="Repeat to filter by multiple categories, e.g. ?category_id=a&category_id=b"
+        ),
+    ] = None,
     start_date: Annotated[date | None, Query()] = None,
     end_date: Annotated[date | None, Query()] = None,
     min_amount: Annotated[Decimal | None, Query(gt=0)] = None,
@@ -47,7 +52,7 @@ async def list_expenses(
 ) -> SuccessResponse[ExpenseListResponse]:
     expenses, total = await expense_service.list_for_user(
         current_user,
-        category_id=category_id,
+        category_ids=category_id,
         start_date=start_date,
         end_date=end_date,
         min_amount=min_amount,

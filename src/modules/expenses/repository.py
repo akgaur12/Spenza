@@ -33,7 +33,7 @@ class ExpenseRepository:
         self,
         user_id: uuid.UUID,
         *,
-        category_id: uuid.UUID | None = None,
+        category_ids: list[uuid.UUID] | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         min_amount: Decimal | None = None,
@@ -44,7 +44,7 @@ class ExpenseRepository:
     ) -> tuple[list[Expense], int]:
         conditions = self._build_conditions(
             user_id,
-            category_id=category_id,
+            category_ids=category_ids,
             start_date=start_date,
             end_date=end_date,
             min_amount=min_amount,
@@ -70,7 +70,7 @@ class ExpenseRepository:
         self,
         user_id: uuid.UUID,
         *,
-        category_id: uuid.UUID | None,
+        category_ids: list[uuid.UUID] | None,
         start_date: date | None,
         end_date: date | None,
         min_amount: Decimal | None,
@@ -78,8 +78,8 @@ class ExpenseRepository:
         search: str | None,
     ) -> list[ColumnElement[bool]]:
         conditions: list[ColumnElement[bool]] = [Expense.user_id == user_id]
-        if category_id is not None:
-            conditions.append(Expense.category_id == category_id)
+        if category_ids:
+            conditions.append(Expense.category_id.in_(category_ids))
         if start_date is not None:
             conditions.append(
                 Expense.spent_at >= datetime.combine(start_date, time.min, tzinfo=UTC)
@@ -115,7 +115,7 @@ class ExpenseRepository:
         """
         conditions = self._build_conditions(
             user_id,
-            category_id=category_id,
+            category_ids=[category_id] if category_id is not None else None,
             start_date=start_date,
             end_date=end_date,
             min_amount=min_amount,
