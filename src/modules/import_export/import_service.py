@@ -27,7 +27,7 @@ from src.core.security import (
     create_action_token,
     decode_action_token,
 )
-from src.core.timezone import APP_TIMEZONE
+from src.core.timezone import local_midnight_utc
 from src.modules.categories.models import Category
 from src.modules.categories.repository import CategoryRepository
 from src.modules.expenses.schemas import ExpenseCreate
@@ -68,15 +68,6 @@ logger = get_logger(__name__)
 IMPORT_SESSION_PURPOSE = "import_session"
 
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
-
-
-def _local_midnight_utc(d: date) -> datetime:
-    """A plain imported date is interpreted as local midnight in the app's
-    single configured timezone (matching `analytics/service.py`'s
-    `_local_midnight_utc`), then converted to UTC for storage in
-    `Expense.spent_at`.
-    """
-    return datetime(d.year, d.month, d.day, tzinfo=APP_TIMEZONE).astimezone(UTC)
 
 
 async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes:
@@ -212,7 +203,7 @@ class ImportService:
                 "category_id": str(resolved_category.id),
                 "description": parsed_description,
                 "amount": str(parsed_amount),
-                "spent_at": _local_midnight_utc(parsed_date).isoformat(),
+                "spent_at": local_midnight_utc(parsed_date).isoformat(),
             }
         return preview_row, session_row
 

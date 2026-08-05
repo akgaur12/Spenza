@@ -483,18 +483,47 @@ async def test_filter_by_end_date(
 async def test_filter_end_date_includes_the_full_day(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:
+    """The full local (`APP_TIMEZONE`) calendar day, not the full UTC day —
+    23:59:59 IST is still 18:29:59 UTC, so a naive UTC-midnight boundary
+    would wrongly exclude it.
+    """
     await _login_user_a(client, email_backend)
     food_id = await _category_id_by_name(client, "Food")
     await _create_expense(
         client,
         category_id=food_id,
         description="Late on end date",
-        spent_at="2026-07-31T23:59:59+00:00",
+        spent_at="2026-07-31T23:59:59+05:30",
     )
 
     listing = await _list_expenses(client, end_date="2026-07-31")
 
     assert [item["description"] for item in listing["items"]] == ["Late on end date"]
+
+
+async def test_filter_by_date_uses_app_timezone_not_utc_calendar_date(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    """Regression test: an expense logged just after midnight IST (e.g.
+    00:34 on 04-Aug) is stored as `2026-08-03T19:04:30+00:00` in UTC, since
+    IST is UTC+5:30. Filtering by the raw UTC calendar date would wrongly
+    bucket it under 03-Aug; it must appear under 04-Aug (its actual IST
+    calendar day, matching how the app displays/groups it) and not 03-Aug.
+    """
+    await _login_user_a(client, email_backend)
+    food_id = await _category_id_by_name(client, "Food")
+    await _create_expense(
+        client,
+        category_id=food_id,
+        description="Late night snack",
+        spent_at="2026-08-03T19:04:30+00:00",
+    )
+
+    aug_3 = await _list_expenses(client, start_date="2026-08-03", end_date="2026-08-03")
+    assert aug_3["items"] == []
+
+    aug_4 = await _list_expenses(client, start_date="2026-08-04", end_date="2026-08-04")
+    assert [item["description"] for item in aug_4["items"]] == ["Late night snack"]
 
 
 async def test_filter_by_date_range(

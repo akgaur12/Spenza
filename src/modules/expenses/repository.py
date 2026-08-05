@@ -7,13 +7,14 @@ paginated in Python.
 """
 
 import uuid
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.core.timezone import local_midnight_utc
 from src.modules.expenses.models import Expense
 
 
@@ -81,12 +82,9 @@ class ExpenseRepository:
         if category_ids:
             conditions.append(Expense.category_id.in_(category_ids))
         if start_date is not None:
-            conditions.append(
-                Expense.spent_at >= datetime.combine(start_date, time.min, tzinfo=UTC)
-            )
+            conditions.append(Expense.spent_at >= local_midnight_utc(start_date))
         if end_date is not None:
-            exclusive_end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=UTC)
-            conditions.append(Expense.spent_at < exclusive_end)
+            conditions.append(Expense.spent_at < local_midnight_utc(end_date + timedelta(days=1)))
         if min_amount is not None:
             conditions.append(Expense.amount >= min_amount)
         if max_amount is not None:

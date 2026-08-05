@@ -15,13 +15,13 @@ a 20-year range. This keeps the Monday-Sunday week convention identical to
 the dashboard module (`src.core.periods`) and fully testable.
 """
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.periods import end_of_month, start_of_month, start_of_week, start_of_year
-from src.core.timezone import APP_TIMEZONE
+from src.core.timezone import APP_TIMEZONE, local_midnight_utc
 from src.modules.analytics.exceptions import (
     DateRangeTooLargeError,
     IncompleteDateRangeError,
@@ -53,10 +53,6 @@ MAX_TREND_RANGE_DAYS = 366 * 20
 YEARLY_DEFAULT_SPAN_YEARS = 5
 
 MIN_HEATMAP_YEAR = 2000
-
-
-def _local_midnight_utc(d: date) -> datetime:
-    return datetime(d.year, d.month, d.day, tzinfo=APP_TIMEZONE).astimezone(UTC)
 
 
 def _validate_date_range(start_date: date | None, end_date: date | None) -> None:
@@ -182,8 +178,8 @@ class AnalyticsService:
 
         rows = await self._repo.get_category_breakdown(
             user.id,
-            _local_midnight_utc(resolved_start),
-            _local_midnight_utc(resolved_end + timedelta(days=1)),
+            local_midnight_utc(resolved_start),
+            local_midnight_utc(resolved_end + timedelta(days=1)),
         )
 
         total_spending = sum((total for _, total, _ in rows), Decimal("0.00"))
@@ -224,8 +220,8 @@ class AnalyticsService:
 
         daily_totals = await self._repo.get_daily_totals(
             user.id,
-            _local_midnight_utc(resolved_start),
-            _local_midnight_utc(resolved_end + timedelta(days=1)),
+            local_midnight_utc(resolved_start),
+            local_midnight_utc(resolved_end + timedelta(days=1)),
         )
 
         bucket_amounts: dict[date, Decimal] = {}
@@ -273,7 +269,7 @@ class AnalyticsService:
         next_year_start = date(resolved_year + 1, 1, 1)
 
         daily_totals = await self._repo.get_daily_totals(
-            user.id, _local_midnight_utc(year_start), _local_midnight_utc(next_year_start)
+            user.id, local_midnight_utc(year_start), local_midnight_utc(next_year_start)
         )
         totals_by_day = {day: (total, count) for day, total, count in daily_totals}
 

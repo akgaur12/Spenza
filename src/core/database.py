@@ -33,9 +33,16 @@ class UTCDateTime(TypeDecorator[datetime]):
     cache_ok = True
 
     def process_bind_param(self, value: datetime | None, dialect: object) -> datetime | None:
-        if value is not None and value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        # A non-UTC offset (e.g. `+05:30` from a client-supplied `spent_at`)
+        # must be converted to a true UTC instant, not just left as-is:
+        # SQLite (the test suite's dialect) has no real timezone type and
+        # stores/compares the naive wall-clock string, silently ignoring
+        # the offset otherwise.
+        return value.astimezone(UTC)
 
     def process_result_value(self, value: datetime | None, dialect: object) -> datetime | None:
         if value is not None and value.tzinfo is None:
