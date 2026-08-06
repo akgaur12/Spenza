@@ -37,11 +37,11 @@ async def test_export_csv_content_type_and_filename(
     response = await client.get("/api/v1/export/expenses", params={"format": "csv"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
-    assert ".csv" in response.headers["content-disposition"]
+    assert 'filename="spenza_user_a_all.csv"' in response.headers["content-disposition"]
     assert "attachment" in response.headers["content-disposition"]
 
 
-async def test_export_csv_filename_reflects_date_range(
+async def test_export_csv_filename_reflects_username_and_date_range(
     client: AsyncClient, email_backend: RecordingEmailBackend
 ) -> None:
     await login_user_a(client, email_backend)
@@ -49,7 +49,29 @@ async def test_export_csv_filename_reflects_date_range(
         "/api/v1/export/expenses",
         params={"format": "csv", "start_date": "2025-01-01", "end_date": "2025-01-31"},
     )
-    assert "2025-01-01-to-2025-01-31" in response.headers["content-disposition"]
+    assert (
+        'filename="spenza_user_a_2025-01-01_to_2025-01-31.csv"'
+        in response.headers["content-disposition"]
+    )
+
+
+async def test_export_csv_exposes_content_disposition_cross_origin(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    """`Content-Disposition` isn't in the browser's CORS-safelisted response
+    headers, so a cross-origin frontend can't read it to derive the download
+    filename unless the server explicitly exposes it (see the CORS
+    middleware config in `src/app.py`).
+    """
+    await login_user_a(client, email_backend)
+    response = await client.get(
+        "/api/v1/export/expenses",
+        params={"format": "csv"},
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert response.status_code == 200
+    exposed = response.headers.get("access-control-expose-headers", "")
+    assert "Content-Disposition" in exposed
 
 
 # ── Content ───────────────────────────────────────────────────────────────

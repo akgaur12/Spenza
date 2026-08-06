@@ -8,7 +8,7 @@ CSV/XLSX/PDF byte-building itself.
 """
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
@@ -35,11 +35,14 @@ _CONTENT_TYPES: dict[str, str] = {
 }
 
 
-def _export_filename(export_format: str, start_date: date | None, end_date: date | None) -> str:
+def _export_filename(
+    export_format: str, username: str, start_date: date | None, end_date: date | None
+) -> str:
     if start_date is not None and end_date is not None:
-        return f"expenses-{start_date.isoformat()}-to-{end_date.isoformat()}.{export_format}"
-    today = datetime.now(UTC).astimezone(APP_TIMEZONE).date()
-    return f"expenses-{today.isoformat()}.{export_format}"
+        date_range = f"{start_date.isoformat()}_to_{end_date.isoformat()}"
+    else:
+        date_range = "all"
+    return f"spenza_{username}_{date_range}.{export_format}"
 
 
 class ExportService:
@@ -86,7 +89,7 @@ class ExportService:
         else:
             body = build_pdf_export(rows, start_date=start_date, end_date=end_date)
 
-        filename = _export_filename(export_format, start_date, end_date)
+        filename = _export_filename(export_format, user.username, start_date, end_date)
         return StreamingResponse(
             iter([body]),
             media_type=_CONTENT_TYPES[export_format],

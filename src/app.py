@@ -59,6 +59,11 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # `Content-Disposition` isn't in the browser's CORS-safelisted
+        # response headers, so without this a cross-origin frontend can
+        # never read it via `response.headers.get(...)` — needed for the
+        # export endpoints' filenames — no matter what `Origin` is sent.
+        expose_headers=["Content-Disposition"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIDMiddleware)
