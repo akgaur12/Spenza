@@ -56,14 +56,14 @@ class ExportService:
         export_format: ExportFormat,
         start_date: date | None,
         end_date: date | None,
-        category_id: uuid.UUID | None,
+        category_ids: list[uuid.UUID] | None,
         min_amount: Decimal | None,
         max_amount: Decimal | None,
         search: str | None,
     ) -> StreamingResponse:
         expenses = await self._expenses.list_for_export(
             user.id,
-            category_id=category_id,
+            category_ids=category_ids,
             start_date=start_date,
             end_date=end_date,
             min_amount=min_amount,

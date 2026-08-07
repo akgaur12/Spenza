@@ -97,7 +97,7 @@ class ExpenseRepository:
         self,
         user_id: uuid.UUID,
         *,
-        category_id: uuid.UUID | None = None,
+        category_ids: list[uuid.UUID] | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         min_amount: Decimal | None = None,
@@ -113,7 +113,7 @@ class ExpenseRepository:
         """
         conditions = self._build_conditions(
             user_id,
-            category_ids=[category_id] if category_id is not None else None,
+            category_ids=category_ids,
             start_date=start_date,
             end_date=end_date,
             min_amount=min_amount,
@@ -128,6 +128,35 @@ class ExpenseRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def exists_duplicate(
+        self,
+        user_id: uuid.UUID,
+        *,
+        category_id: uuid.UUID,
+        description: str,
+        amount: Decimal,
+        spent_at: datetime,
+    ) -> bool:
+        """True if the user already has an expense with the exact same
+        category, description, amount, and spend timestamp. Used by the
+        import preview to flag likely-duplicate rows — an exact match on all
+        four fields, not a fuzzy heuristic, so two genuinely distinct
+        expenses that happen to share these values are a rare enough
+        coincidence that flagging them is an acceptable tradeoff.
+        """
+        result = await self._session.execute(
+            select(Expense.id)
+            .where(
+                Expense.user_id == user_id,
+                Expense.category_id == category_id,
+                Expense.description == description,
+                Expense.amount == amount,
+                Expense.spent_at == spent_at,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     def create(
         self,

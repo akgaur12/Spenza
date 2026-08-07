@@ -30,6 +30,7 @@ from src.core.security import (
 from src.core.timezone import local_midnight_utc
 from src.modules.categories.models import Category
 from src.modules.categories.repository import CategoryRepository
+from src.modules.expenses.repository import ExpenseRepository
 from src.modules.expenses.schemas import ExpenseCreate
 from src.modules.expenses.service import ExpenseService
 from src.modules.expenses.validators import validate_description
@@ -95,6 +96,7 @@ class ImportService:
         self._session = session
         self._sessions = ImportSessionRepository(session)
         self._categories = CategoryRepository(session)
+        self._expenses_repo = ExpenseRepository(session)
         self._expenses = ExpenseService(session)
 
     # ── Preview ──────────────────────────────────────────────────────────
@@ -180,6 +182,31 @@ class ImportService:
         parsed_description = self._parse_description_field(raw.description, errors)
         parsed_amount = self._parse_amount_field(raw.amount, errors)
 
+        spent_at: datetime | None = None
+        if (
+            not errors
+            and parsed_date is not None
+            and resolved_category is not None
+            and parsed_description is not None
+            and parsed_amount is not None
+        ):
+            spent_at = local_midnight_utc(parsed_date)
+            is_duplicate = await self._expenses_repo.exists_duplicate(
+                user.id,
+                category_id=resolved_category.id,
+                description=parsed_description,
+                amount=parsed_amount,
+                spent_at=spent_at,
+            )
+            if is_duplicate:
+                errors.append(
+                    ImportRowError(
+                        field="duplicate",
+                        code=ImportRowErrorCode.DUPLICATE_EXPENSE,
+                        message="An identical expense already exists.",
+                    )
+                )
+
         is_valid = not errors
         preview_row = ImportPreviewRow(
             row_number=raw.row_number,
@@ -194,7 +221,7 @@ class ImportService:
         session_row: dict[str, str] | None = None
         if (
             is_valid
-            and parsed_date is not None
+            and spent_at is not None
             and resolved_category is not None
             and parsed_description is not None
             and parsed_amount is not None
@@ -203,7 +230,7 @@ class ImportService:
                 "category_id": str(resolved_category.id),
                 "description": parsed_description,
                 "amount": str(parsed_amount),
-                "spent_at": local_midnight_utc(parsed_date).isoformat(),
+                "spent_at": spent_at.isoformat(),
             }
         return preview_row, session_row
 

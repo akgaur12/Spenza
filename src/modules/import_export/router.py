@@ -67,7 +67,12 @@ async def export_expenses(
     export_format: Annotated[ExportFormat, Query(alias="format")],
     start_date: Annotated[date | None, Query()] = None,
     end_date: Annotated[date | None, Query()] = None,
-    category_id: Annotated[uuid.UUID | None, Query()] = None,
+    category_id: Annotated[
+        list[uuid.UUID] | None,
+        Query(
+            description="Repeat to filter by multiple categories, e.g. ?category_id=a&category_id=b"
+        ),
+    ] = None,
     min_amount: Annotated[Decimal | None, Query(gt=0)] = None,
     max_amount: Annotated[Decimal | None, Query(gt=0)] = None,
     search: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
@@ -77,7 +82,7 @@ async def export_expenses(
         export_format=export_format,
         start_date=start_date,
         end_date=end_date,
-        category_id=category_id,
+        category_ids=category_id,
         min_amount=min_amount,
         max_amount=max_amount,
         search=search,

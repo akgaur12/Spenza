@@ -24,6 +24,7 @@ class ImportRowErrorCode(StrEnum):
     DESCRIPTION_TOO_LONG = "DESCRIPTION_TOO_LONG"
     INVALID_AMOUNT = "INVALID_AMOUNT"
     AMOUNT_MUST_BE_POSITIVE = "AMOUNT_MUST_BE_POSITIVE"
+    DUPLICATE_EXPENSE = "DUPLICATE_EXPENSE"
 
 
 # ── Requests ──────────────────────────────────────────────────────────────

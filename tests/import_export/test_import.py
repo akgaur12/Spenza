@@ -17,6 +17,7 @@ from tests.import_export.helpers import (
     category_id_by_name,
     confirm_import,
     create_category,
+    create_expense,
     deactivate_category,
     list_expenses,
     login_user_a,
@@ -414,6 +415,121 @@ async def test_invalid_amount_rejected(
     row = response.json()["data"]["rows"][0]
     assert row["valid"] is False
     assert row["errors"][0]["code"] == "INVALID_AMOUNT"
+
+
+# ── Duplicate detection ───────────────────────────────────────────────────
+
+
+async def test_row_matching_an_existing_expense_is_rejected_as_duplicate(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = await category_id_by_name(client, "Food")
+    await create_expense(
+        client,
+        category_id=food_id,
+        description="Cake",
+        amount="278.00",
+        spent_at="2025-01-01T00:00:00+05:30",
+    )
+
+    content = build_csv_bytes([("01-Jan-2025", "Food", "Cake", "278")])
+    response = await preview_import(client, content, "expenses.csv")
+    data = response.json()["data"]
+    row = data["rows"][0]
+    assert row["valid"] is False
+    assert row["errors"][0]["code"] == "DUPLICATE_EXPENSE"
+    assert data["valid_rows"] == 0
+    assert data["invalid_rows"] == 1
+
+
+async def test_duplicate_row_is_excluded_from_confirmation(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = await category_id_by_name(client, "Food")
+    await create_expense(
+        client,
+        category_id=food_id,
+        description="Cake",
+        amount="278.00",
+        spent_at="2025-01-01T00:00:00+05:30",
+    )
+
+    content = build_csv_bytes(
+        [
+            ("01-Jan-2025", "Food", "Cake", "278"),  # duplicate of the existing expense
+            ("02-Jan-2025", "Transport", "Petrol", "2000"),  # genuinely new
+        ]
+    )
+    preview_response = await preview_import(client, content, "expenses.csv")
+    assert preview_response.json()["data"]["valid_rows"] == 1
+    token = preview_response.json()["data"]["import_token"]
+
+    confirm_response = await confirm_import(client, token)
+    assert confirm_response.status_code == 200, confirm_response.text
+    assert confirm_response.json()["data"]["imported_count"] == 1
+
+    listing = await list_expenses(client)
+    assert listing["total"] == 2  # the original expense + the one new import
+
+
+async def test_different_amount_is_not_flagged_as_duplicate(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = await category_id_by_name(client, "Food")
+    await create_expense(
+        client,
+        category_id=food_id,
+        description="Cake",
+        amount="278.00",
+        spent_at="2025-01-01T00:00:00+05:30",
+    )
+
+    content = build_csv_bytes([("01-Jan-2025", "Food", "Cake", "279")])
+    response = await preview_import(client, content, "expenses.csv")
+    row = response.json()["data"]["rows"][0]
+    assert row["valid"] is True
+
+
+async def test_different_description_is_not_flagged_as_duplicate(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = await category_id_by_name(client, "Food")
+    await create_expense(
+        client,
+        category_id=food_id,
+        description="Cake",
+        amount="278.00",
+        spent_at="2025-01-01T00:00:00+05:30",
+    )
+
+    content = build_csv_bytes([("01-Jan-2025", "Food", "Different item", "278")])
+    response = await preview_import(client, content, "expenses.csv")
+    row = response.json()["data"]["rows"][0]
+    assert row["valid"] is True
+
+
+async def test_duplicate_check_is_scoped_to_the_authenticated_user(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_b(client, email_backend)
+    food_id_b = await category_id_by_name(client, "Food")
+    await create_expense(
+        client,
+        category_id=food_id_b,
+        description="Cake",
+        amount="278.00",
+        spent_at="2025-01-01T00:00:00+05:30",
+    )
+
+    await login_user_a(client, email_backend)
+    content = build_csv_bytes([("01-Jan-2025", "Food", "Cake", "278")])
+    response = await preview_import(client, content, "expenses.csv")
+    row = response.json()["data"]["rows"][0]
+    assert row["valid"] is True
 
 
 # ── Preview semantics ─────────────────────────────────────────────────────

@@ -190,6 +190,31 @@ async def test_export_csv_category_filter(
     assert descriptions == ["Cake"]
 
 
+async def test_export_csv_multiple_category_filter(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = await category_id_by_name(client, "Food")
+    transport_id = await category_id_by_name(client, "Transport")
+    other_id = await category_id_by_name(client, "Other")
+    await create_expense(
+        client, category_id=food_id, spent_at="2025-01-01T00:00:00+05:30", description="Cake"
+    )
+    await create_expense(
+        client, category_id=transport_id, spent_at="2025-01-02T00:00:00+05:30", description="Petrol"
+    )
+    await create_expense(
+        client, category_id=other_id, spent_at="2025-01-03T00:00:00+05:30", description="Misc"
+    )
+    response = await client.get(
+        "/api/v1/export/expenses",
+        params={"format": "csv", "category_id": [food_id, transport_id]},
+    )
+    rows = _parse_csv(response.content)
+    descriptions = [row[3] for row in rows[1:] if row]
+    assert descriptions == ["Cake", "Petrol"]
+
+
 # ── User isolation ────────────────────────────────────────────────────────
 
 
