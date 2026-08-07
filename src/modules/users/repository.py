@@ -20,6 +20,16 @@ class UserRepository:
     async def get_by_id(self, user_id: uuid.UUID) -> User | None:
         return await self._session.get(User, user_id)
 
+    async def get_many_by_id(self, user_ids: set[uuid.UUID]) -> dict[uuid.UUID, User]:
+        """Batch-fetch owners by id, keyed by id — used by cross-user batch
+        jobs (e.g. the recurring-expenses scheduler) to avoid one query per
+        row when processing many users' records in a single pass.
+        """
+        if not user_ids:
+            return {}
+        result = await self._session.execute(select(User).where(User.id.in_(user_ids)))
+        return {user.id: user for user in result.scalars().all()}
+
     async def get_by_email(self, email: str) -> User | None:
         result = await self._session.execute(select(User).where(User.email == email.lower()))
         return result.scalar_one_or_none()

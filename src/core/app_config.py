@@ -111,6 +111,12 @@ class Settings(BaseSettings):
     IMPORT_SESSION_EXPIRE_MINUTES: int = 30
     MAX_EXPORT_ROWS: int = 50_000
 
+    # ── Recurring expenses ─────────────────────────────────────────────
+    # The daily due-recurrence job runs once per day at this time, in
+    # `APP_TIMEZONE` — see `recurring_expenses.scheduler`.
+    RECURRING_EXPENSE_SCHEDULER_HOUR: int = 1
+    RECURRING_EXPENSE_SCHEDULER_MINUTE: int = 0
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins_list(self) -> list[str]:

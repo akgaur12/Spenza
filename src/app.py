@@ -27,6 +27,7 @@ from src.modules.dashboard.router import dashboard_router  # noqa: E402
 from src.modules.expenses.router import expense_router  # noqa: E402
 from src.modules.health.router import health_router  # noqa: E402
 from src.modules.import_export.router import export_router, import_router  # noqa: E402
+from src.modules.recurring_expenses.router import recurring_expense_router  # noqa: E402
 from src.modules.reports.router import reports_router  # noqa: E402
 from src.modules.users.admin_router import admin_router  # noqa: E402
 from src.modules.users.user_router import user_router  # noqa: E402
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(category_router)
     app.include_router(admin_category_router)
     app.include_router(expense_router)
+    app.include_router(recurring_expense_router)
     app.include_router(dashboard_router)
     app.include_router(analytics_router)
     app.include_router(import_router)

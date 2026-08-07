@@ -30,7 +30,7 @@ class ExpenseService:
         self._categories = CategoryRepository(session)
 
     async def create_for_user(self, user: User, data: ExpenseCreate) -> Expense:
-        category = await self._validate_category(data.category_id, user)
+        category = await self.validate_category_for_user(data.category_id, user)
         expense = self._expenses.create(
             user_id=user.id,
             category_id=category.id,
@@ -83,7 +83,7 @@ class ExpenseService:
 
         new_category_id = updates.pop("category_id", None)
         if new_category_id is not None:
-            category = await self._validate_category(new_category_id, user)
+            category = await self.validate_category_for_user(new_category_id, user)
             expense.category_id = category.id
             expense.category = category
 
@@ -106,12 +106,16 @@ class ExpenseService:
             raise ExpenseNotFoundError()
         return expense
 
-    async def _validate_category(self, category_id: uuid.UUID, user: User) -> Category:
+    async def validate_category_for_user(self, category_id: uuid.UUID, user: User) -> Category:
         """A category is usable on an expense only if it's active, and is
         either a system category (`user_id is None`) or owned by the same
         user. Any other outcome — missing, inactive, or another user's
         category — is reported identically as not-found, so a request can
         never distinguish "doesn't exist" from "exists but isn't yours".
+
+        Public (not `_`-prefixed): the `recurring_expenses` module reuses
+        this exact rule to validate a recurring expense's category, rather
+        than re-implementing it — see that module's docstring for why.
         """
         category = await self._categories.get_by_id(category_id)
         if category is None or not category.is_active:

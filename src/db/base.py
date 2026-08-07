@@ -7,6 +7,7 @@ from src.core.database import Base
 from src.modules.categories.models import Category
 from src.modules.expenses.models import Expense
 from src.modules.import_export.models import ImportSession
+from src.modules.recurring_expenses.models import RecurringExpense
 from src.modules.users.models import EmailOTP, RefreshSession, User
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "EmailOTP",
     "Expense",
     "ImportSession",
+    "RecurringExpense",
     "RefreshSession",
     "User",
 ]
