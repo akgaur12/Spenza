@@ -1,0 +1,94 @@
+<section class="section">
+  <h2 class="section-title">Key Metrics</h2>
+  <table class="kv-table">
+    <tr>
+      <th>Total Spending</th>
+      <td>{{ report.summary.total_spending | money }}</td>
+    </tr>
+    <tr>
+      <th>Expense Count</th>
+      <td>{{ report.summary.expense_count }}</td>
+    </tr>
+    <tr>
+      <th>Average Daily Spending</th>
+      <td>{{ report.summary.daily_average | money }}</td>
+    </tr>
+    {% if report.metadata.report_type in ("yearly", "quarterly", "custom") and report.monthly_category|length > 1 %}
+    <tr>
+      <th>Average Monthly Spending</th>
+      <td>{{ report.summary.average_monthly_spending | money }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <th>Largest Expense</th>
+      <td>
+        {% if report.summary.largest_expense %}
+          {{ report.summary.largest_expense.amount | money }} &mdash;
+          {{ report.summary.largest_expense.description }}
+          ({{ report.summary.largest_expense.category.name }})
+        {% else %}&mdash;{% endif %}
+      </td>
+    </tr>
+    {% if report.metadata.report_type in ("yearly", "quarterly", "custom") %}
+    <tr>
+      <th>Top Category</th>
+      <td>
+        {% if report.summary.top_category %}
+          {{ report.summary.top_category.name }}
+          ({{ "%.1f"|format(report.summary.top_category.percentage) }}%)
+        {% else %}&mdash;{% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if report.metadata.report_type in ("yearly", "quarterly") %}
+    <tr>
+      <th>Vs. {{ report.summary.comparison_label }}</th>
+      <td class="comparison {{ report.summary.comparison.trend }}">
+        {% if report.summary.comparison.trend == "up" %}
+          &#9650;
+        {% elif report.summary.comparison.trend == "down" %}
+          &#9660;
+        {% else %}
+          &#9632;
+        {% endif %}
+        {% if report.summary.comparison.percentage_change is not none %}
+          {{ "%.1f"|format(report.summary.comparison.percentage_change) }}%
+        {% else %}
+          {{ report.summary.comparison.difference | money }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if report.monthly_category|length > 1 and report.insights.highest_spending_month_label %}
+    <tr>
+      <th>Highest Spending Month</th>
+      <td>
+        {{ report.insights.highest_spending_month_label }} &mdash;
+        {{ report.insights.highest_spending_month_total | money }}
+      </td>
+    </tr>
+    {% endif %}
+    <tr>
+      <th>Highest Spending Week</th>
+      <td>
+        {% if report.insights.highest_spending_week_label %}
+          {{ report.insights.highest_spending_week_label }} &mdash;
+          {{ report.insights.highest_spending_week_total | money }}
+        {% else %}&mdash;{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Highest Spending Day</th>
+      <td>
+        {% if report.insights.highest_spending_day %}
+          {{ report.insights.highest_spending_day | fdate }} &mdash;
+          {{ report.insights.highest_spending_day_total | money }}
+        {% else %}&mdash;{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Zero Spending Days</th>
+      <td>{{ report.monthly_statistics.zero_spending_days }}</td>
+    </tr>
+  </table>
+</section>

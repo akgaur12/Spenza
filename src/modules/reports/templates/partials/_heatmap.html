@@ -1,0 +1,80 @@
+{% macro heatmap_legend() %}
+<div class="heatmap-legend">
+  <span class="heatmap-legend-item"><span class="heatmap-legend-swatch intensity-0"></span>No spending</span>
+  <span class="heatmap-legend-item"><span class="heatmap-legend-swatch intensity-1"></span>Low</span>
+  <span class="heatmap-legend-item"><span class="heatmap-legend-swatch intensity-2"></span>Medium</span>
+  <span class="heatmap-legend-item"><span class="heatmap-legend-swatch intensity-3"></span>High</span>
+  <span class="heatmap-legend-item"><span class="heatmap-legend-swatch intensity-4"></span>Very high</span>
+</div>
+{% endmacro %}
+
+{% if report.metadata.report_type != "custom" %}
+{% if report.metadata.report_type == "yearly" %}
+  {% if report.year_heatmap %}
+  <section class="section">
+    <h2 class="section-title">Calendar Heatmap</h2>
+    <div class="year-heatmap">
+      <div class="year-heatmap-row">
+        <span class="year-heatmap-row-label"></span>
+        <div class="year-heatmap-cells year-heatmap-day-numbers">
+          {% for d in range(1, 32) %}
+          <span>{{ d }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% for row in report.year_heatmap.rows %}
+      <div class="year-heatmap-row">
+        <span class="year-heatmap-row-label">{{ row.label }}</span>
+        <div class="year-heatmap-cells">
+          {% for day in row.days %}
+            {% if day %}
+            <div class="heatmap-cell intensity-{{ day.intensity_level }}"></div>
+            {% else %}
+            <div class="heatmap-cell empty"></div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {{ heatmap_legend() }}
+  </section>
+  {% elif report.heatmap_note %}
+  <section class="section">
+    <h2 class="section-title">Calendar Heatmap</h2>
+    <p class="note">{{ report.heatmap_note }}</p>
+  </section>
+  {% endif %}
+{% else %}
+  {% if report.heatmap %}
+  <section class="section">
+    <h2 class="section-title">Calendar Heatmap</h2>
+    {% for grid in report.heatmap.months %}
+    <div class="heatmap-month">
+      <div class="heatmap-month-label">{{ grid.label }}</div>
+      <div class="heatmap-weekdays">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+      {% for week in grid.weeks %}
+      <div class="heatmap-week">
+        {% for day in week %}
+          {% if day %}
+          <div class="heatmap-cell intensity-{{ day.intensity_level }}{% if not day.is_in_range %} out-of-range{% endif %}">{{ day.day }}</div>
+          {% else %}
+          <div class="heatmap-cell empty"></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {{ heatmap_legend() }}
+  </section>
+  {% elif report.heatmap_note %}
+  <section class="section">
+    <h2 class="section-title">Calendar Heatmap</h2>
+    <p class="note">{{ report.heatmap_note }}</p>
+  </section>
+  {% endif %}
+{% endif %}
+{% endif %}

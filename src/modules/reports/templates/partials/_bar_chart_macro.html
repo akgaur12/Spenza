@@ -1,0 +1,23 @@
+{% macro bar_chart(chart) %}
+<div class="daily-chart-wrap">
+  <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}">
+    {% for grid in chart.gridlines %}
+    <line x1="{{ chart.plot_left }}" y1="{{ '%.1f'|format(grid.y) }}"
+          x2="{{ chart.width }}" y2="{{ '%.1f'|format(grid.y) }}"
+          stroke="#e5e7eb" stroke-width="1"></line>
+    <text x="{{ chart.plot_left - 6 }}" y="{{ '%.1f'|format(grid.y + 3) }}"
+          font-size="8" fill="#9ca3af" text-anchor="end">{{ grid.label }}</text>
+    {% endfor %}
+    <line x1="{{ chart.plot_left }}" y1="{{ '%.1f'|format(chart.average_y) }}"
+          x2="{{ chart.width }}" y2="{{ '%.1f'|format(chart.average_y) }}"
+          stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"></line>
+    {% for bar in chart.bars %}
+    <rect x="{{ '%.1f'|format(bar.x) }}" y="{{ '%.1f'|format(bar.y) }}"
+          width="{{ '%.1f'|format(bar.width) }}" height="{{ '%.1f'|format(bar.height) }}"
+          rx="2" fill="{{ '#15803d' if bar.is_highest else '#4ade80' }}"></rect>
+    <text x="{{ '%.1f'|format(bar.x + bar.width / 2) }}" y="{{ '%.1f'|format(chart.baseline_y + 14) }}"
+          font-size="8" fill="#9ca3af" text-anchor="middle">{{ bar.label }}</text>
+    {% endfor %}
+  </svg>
+</div>
+{% endmacro %}

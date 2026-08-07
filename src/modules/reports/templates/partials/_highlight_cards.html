@@ -1,0 +1,47 @@
+<div class="highlight-cards">
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total Spending</div>
+      <div class="card-value">{{ report.summary.total_spending | money }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Top Category</div>
+      <div class="card-value">
+        {% if report.summary.top_category %}
+          {{ report.summary.top_category.name }}
+          ({{ "%.1f"|format(report.summary.top_category.percentage) }}%)
+        {% else %}&mdash;{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Highest Spending Day</div>
+      <div class="card-value">
+        {% if report.insights.highest_spending_day %}
+          {{ report.insights.highest_spending_day | fdate }}
+        {% else %}&mdash;{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      {% if report.metadata.report_type == "custom" %}
+        <div class="card-label">Avg. Daily Spending</div>
+        <div class="card-value">{{ report.summary.daily_average | money }}</div>
+      {% else %}
+        <div class="card-label">Vs. {{ report.summary.comparison_label }}</div>
+        <div class="card-value comparison {{ report.summary.comparison.trend }}">
+          {% if report.summary.comparison.trend == "up" %}
+            &#9650;
+          {% elif report.summary.comparison.trend == "down" %}
+            &#9660;
+          {% else %}
+            &#9632;
+          {% endif %}
+          {% if report.summary.comparison.percentage_change is not none %}
+            {{ "%.1f"|format(report.summary.comparison.percentage_change) }}%
+          {% else %}
+            {{ report.summary.comparison.difference | money }}
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

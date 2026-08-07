@@ -1,0 +1,12 @@
+<section class="section">
+  <h2 class="section-title">Spending Insights</h2>
+  {% if report.narrative_insights %}
+  <ul class="insight-list">
+    {% for line in report.narrative_insights %}
+    <li>{{ line }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="note">No insights available for this period.</p>
+  {% endif %}
+</section>

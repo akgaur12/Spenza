@@ -75,6 +75,21 @@ class LargestExpenseSummary(BaseModel):
     category: LargestExpenseCategory
 
 
+class RangeSummary(BaseModel):
+    """Same shape as the fixed `this_month`/`this_year` windows above, but for
+    an arbitrary `[start, end)` range — used by callers (e.g. the `reports`
+    module) that need "this month"-style metrics for a period that isn't
+    necessarily anchored to "now".
+    """
+
+    total: Decimal
+    expense_count: int
+    daily_average: Decimal
+    average_expense: Decimal
+    top_category: DashboardCategorySummary | None
+    largest_expense: LargestExpenseSummary | None
+
+
 class DashboardSummaryResponse(BaseModel):
     today: TodaySummary
     this_week: WeekSummary

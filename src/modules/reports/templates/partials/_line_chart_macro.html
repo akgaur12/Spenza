@@ -1,0 +1,27 @@
+{% macro line_chart(chart) %}
+<div class="daily-chart-wrap">
+  <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}">
+    {% for grid in chart.gridlines %}
+    <line x1="{{ chart.plot_left }}" y1="{{ '%.1f'|format(grid.y) }}"
+          x2="{{ chart.width }}" y2="{{ '%.1f'|format(grid.y) }}"
+          stroke="#e5e7eb" stroke-width="1"></line>
+    <text x="{{ chart.plot_left - 6 }}" y="{{ '%.1f'|format(grid.y + 3) }}"
+          font-size="8" fill="#9ca3af" text-anchor="end">{{ grid.label }}</text>
+    {% endfor %}
+    <line x1="{{ chart.plot_left }}" y1="{{ '%.1f'|format(chart.average_y) }}"
+          x2="{{ chart.width }}" y2="{{ '%.1f'|format(chart.average_y) }}"
+          stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"></line>
+    <path d="{{ chart.area_path }}" fill="#16a34a" fill-opacity="0.12" stroke="none"></path>
+    <path d="{{ chart.line_path }}" fill="none" stroke="#16a34a" stroke-width="2"
+          stroke-linejoin="round" stroke-linecap="round"></path>
+    {% if chart.highlight %}
+    <circle cx="{{ '%.1f'|format(chart.highlight.x) }}" cy="{{ '%.1f'|format(chart.highlight.y) }}"
+            r="4" fill="#15803d" stroke="#ffffff" stroke-width="2"></circle>
+    {% endif %}
+    {% for lbl in chart.x_labels %}
+    <text x="{{ '%.1f'|format(lbl.x) }}" y="{{ '%.1f'|format(chart.baseline_y + 14) }}"
+          font-size="8" fill="#9ca3af" text-anchor="middle">{{ lbl.label }}</text>
+    {% endfor %}
+  </svg>
+</div>
+{% endmacro %}

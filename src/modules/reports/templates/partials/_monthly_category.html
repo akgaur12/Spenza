@@ -1,0 +1,26 @@
+{% if report.monthly_category and report.monthly_category|length > 1 %}
+<section class="section">
+  <h2 class="section-title">Monthly Category Analysis</h2>
+  <table>
+    <thead>
+      <tr><th>Month</th><th>Total</th><th>Expenses</th><th>Top Category</th></tr>
+    </thead>
+    <tbody>
+      {% for bucket in report.monthly_category %}
+      <tr>
+        <td>{{ bucket.period_label }}</td>
+        <td>{{ bucket.total_spending | money }}</td>
+        <td>{{ bucket.expense_count }}</td>
+        <td>
+          {% if bucket.top_categories %}
+            {{ bucket.top_categories[0].name }} ({{ bucket.top_categories[0].total | money }})
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}

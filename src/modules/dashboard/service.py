@@ -39,6 +39,7 @@ from src.modules.dashboard.schemas import (
     MonthComparison,
     MonthSummary,
     PreviousMonthSummary,
+    RangeSummary,
     TodaySummary,
     WeekSummary,
     YearSummary,
@@ -146,6 +147,30 @@ class DashboardService:
             ),
             month_comparison=_compare_months(month_total, previous_month_total),
             top_category=_to_top_category(top_category_row, month_total),
+            largest_expense=_to_largest_expense(largest_expense),
+        )
+
+    async def get_range_summary(
+        self, user: User, start_utc: datetime, end_utc: datetime, span_days: int
+    ) -> RangeSummary:
+        """The same metrics as `this_month`/`this_year` in `get_summary()`,
+        generalized to an arbitrary `[start_utc, end_utc)` range — e.g. a
+        past calendar month/quarter/year a report was asked to cover, which
+        `get_summary()` can't serve since it's anchored to "now".
+        `span_days` is the caller's own day count for the range (not
+        recomputed here, since "half-open UTC range" and "calendar day
+        count" are two different things the caller already knows).
+        """
+        total, count = await self._dashboard.get_period_summary(user.id, start_utc, end_utc)
+        top_category_row = await self._dashboard.get_top_category(user.id, start_utc, end_utc)
+        largest_expense = await self._dashboard.get_largest_expense(user.id, start_utc, end_utc)
+
+        return RangeSummary(
+            total=total,
+            expense_count=count,
+            daily_average=_divide(total, span_days) if span_days > 0 else Decimal("0.00"),
+            average_expense=_average_expense(total, count),
+            top_category=_to_top_category(top_category_row, total),
             largest_expense=_to_largest_expense(largest_expense),
         )
 

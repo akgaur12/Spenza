@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ report.metadata.title }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 16mm 20mm 16mm;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #9ca3af;
+      font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+    }
+    @bottom-left {
+      content: "{{ report.metadata.app_name }} · Generated {{ report.metadata.generated_at | fdate }}";
+      font-size: 8pt;
+      color: #9ca3af;
+      font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+    color: #1f2937;
+    font-size: 10pt;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  h1, h2, h3 { color: #1f2937; margin: 0 0 8px 0; }
+
+  p { margin: 0 0 6px 0; }
+
+  .note { color: #6b7280; font-style: italic; }
+
+  /* ── Report header (page 1 banner, not a separate cover page) ────── */
+
+  .report-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f0fdf4;
+    border-bottom: 3px solid #16a34a;
+    border-radius: 6px 6px 0 0;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    break-after: avoid;
+  }
+  .report-header-brand { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  .report-header-logo { width: 12mm; height: 12mm; flex-shrink: 0; }
+  .report-header-appname {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #15803d;
+    margin-bottom: 2px;
+  }
+  .report-header-title { font-size: 13pt; font-weight: 700; margin: 0; }
+  .report-header-period { font-size: 10pt; color: #15803d; font-weight: 600; }
+  .report-header-meta {
+    flex: 1;
+    text-align: right;
+    font-size: 8.5pt;
+    color: #374151;
+    white-space: nowrap;
+  }
+  .report-header-meta p { margin: 0 0 3px 0; }
+  .report-header-username { font-size: 12pt; font-weight: 700; color: #1f2937; }
+
+  /* ── Sections shared by every report body ──────────────────────── */
+
+  .section { break-inside: avoid; margin-bottom: 32px; }
+  .section-title {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #15803d;
+    border-bottom: 2px solid #15803d;
+    padding-bottom: 4px;
+    margin-bottom: 16px;
+  }
+
+  .highlight-cards { margin-bottom: 20px; break-inside: avoid; }
+  .cards { display: flex; gap: 10px; margin-bottom: 0; }
+  .card {
+    flex: 1;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #16a34a;
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .card-label {
+    font-size: 8pt;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.3;
+    min-height: 20pt;
+    margin-bottom: 4px;
+  }
+  .card-value { font-size: 13pt; font-weight: 700; color: #15803d; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 4px; }
+  thead { display: table-header-group; } /* repeats on every page a table spans */
+  tr { break-inside: avoid; }
+  th {
+    background: #16a34a;
+    color: #ffffff;
+    text-align: left;
+    padding: 6px 8px;
+    font-weight: 600;
+  }
+  td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+
+  .kv-table th {
+    width: 32%;
+    background: #f8fafc;
+    color: #1f2937;
+    font-weight: 700;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .kv-table td { background: #ffffff; }
+
+  .bar-track {
+    display: inline-block;
+    width: 60%;
+    background: #e5e7eb;
+    border-radius: 3px;
+    height: 7px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .bar-fill { background: #16a34a; height: 100%; }
+  .pct-label { font-size: 8pt; color: #6b7280; margin-left: 4px; }
+
+  .trend-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .trend-bar-label { width: 20%; font-size: 8pt; color: #6b7280; }
+  .trend-bar-row .bar-track { width: auto; flex: 1; }
+  .trend-bar-value { width: 20%; text-align: right; font-size: 8pt; }
+
+  .comparison.up { color: #dc2626; font-weight: 600; }
+  .comparison.down { color: #16a34a; font-weight: 600; }
+  .comparison.same { color: #6b7280; font-weight: 600; }
+
+  /* ── Calendar heatmap ────────────────────────────────────────────── */
+
+  .heatmap-month { margin-bottom: 10px; break-inside: avoid; }
+  .heatmap-month-label { font-size: 9pt; font-weight: 700; margin-bottom: 4px; }
+  .heatmap-weekdays, .heatmap-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 2px;
+  }
+  .heatmap-weekdays span {
+    font-size: 6.5pt;
+    color: #9ca3af;
+    text-align: center;
+  }
+  .heatmap-cell {
+    border-radius: 2px;
+    font-size: 6.5pt;
+    text-align: center;
+    line-height: 2.4;
+    color: #1f2937;
+  }
+  .heatmap-cell.empty { background: transparent; }
+  .heatmap-cell.out-of-range { opacity: 0.35; }
+  .intensity-0 { background: #f0fdf4; }
+  .intensity-1 { background: #bbf7d0; }
+  .intensity-2 { background: #4ade80; color: #ffffff; }
+  .intensity-3 { background: #16a34a; color: #ffffff; }
+  .intensity-4 { background: #14532d; color: #ffffff; }
+
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 18px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .heatmap-legend-item {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
+    gap: 5px;
+    font-size: 8pt;
+    color: #6b7280;
+  }
+  .heatmap-legend-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  /* ── Year heatmap: 12 month-rows x 31 day-columns in one matrix ────── */
+
+  .year-heatmap { margin-bottom: 4px; }
+  .year-heatmap-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 14px;
+    margin-bottom: 2px;
+  }
+  .year-heatmap-row-label {
+    width: 26px;
+    flex-shrink: 0;
+    font-size: 7pt;
+    font-weight: 700;
+    color: #6b7280;
+  }
+  .year-heatmap-cells {
+    flex: 1;
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(31, 1fr);
+    gap: 1.5px;
+  }
+  .year-heatmap-cells .heatmap-cell {
+    /* WeasyPrint doesn't size empty CSS grid items via `aspect-ratio`, so
+       height is taken from the row instead of derived from cell width. */
+    height: 100%;
+    border-radius: 1px;
+    font-size: 0;
+  }
+  .year-heatmap-day-numbers span {
+    font-size: 6pt;
+    color: #9ca3af;
+    text-align: center;
+  }
+
+  /* ── Narrative insights ────────────────────────────────────────── */
+
+  .insight-list {
+    list-style: none;
+    margin: 0;
+    padding: 12px 16px;
+    background: #f0fdf4;
+    border-left: 3px solid #16a34a;
+    border-radius: 0 6px 6px 0;
+  }
+  .insight-list li {
+    position: relative;
+    padding-left: 14px;
+    margin-bottom: 6px;
+    font-size: 9.5pt;
+  }
+  .insight-list li:last-child { margin-bottom: 0; }
+  .insight-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #16a34a;
+  }
+
+  /* ── Daily trend line chart ────────────────────────────────────── */
+
+  .daily-chart-wrap { width: 100%; }
+  .daily-chart-wrap svg { width: 100%; height: auto; display: block; }
+
+  /* ── Weekday bars + category donut ─────────────────────────────────── */
+
+  .weekday-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .weekday-label { width: 15%; font-size: 8pt; color: #6b7280; }
+  .weekday-row .bar-track { width: auto; flex: 1; background: #e5e7eb; }
+  .weekday-row .bar-fill { background: #86efac; }
+  .weekday-row.is-highest .bar-fill { background: #16a34a; }
+  .weekday-value { width: 22%; text-align: right; font-size: 8pt; }
+  .weekday-row.is-highest .weekday-value { font-weight: 700; color: #15803d; }
+
+  .donut-wrap { display: flex; align-items: center; gap: 14px; }
+  .donut-legend { list-style: none; margin: 0; padding: 0; flex: 1; }
+  .donut-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 8.5pt;
+    margin-bottom: 5px;
+  }
+  .donut-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .donut-legend-label { flex: 1; color: #1f2937; }
+  .donut-legend-pct { color: #6b7280; }
+
+  /* ── Top expenses ──────────────────────────────────────────────── */
+
+  .rank-badge {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #16a34a;
+    color: #ffffff;
+    text-align: center;
+    line-height: 16px;
+    font-size: 7.5pt;
+    font-weight: 700;
+  }
+
+  /* ── Closing footer (once, at the end of the document) ────────────── */
+
+  .closing-footer {
+    break-inside: avoid;
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 8pt;
+  }
+  .closing-footer p { margin: 0 0 3px 0; }
+  .closing-footer .closing-footer-brand { color: #15803d; font-weight: 700; }
+</style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>

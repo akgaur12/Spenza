@@ -1,0 +1,12 @@
+<section class="section">
+  <h2 class="section-title">Weekday Spending Trends</h2>
+  {% for bar in report.weekday_chart.bars %}
+  <div class="weekday-row{% if bar.is_highest %} is-highest{% endif %}">
+    <div class="weekday-label">{{ bar.label }}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width: {{ '%.1f'|format(bar.bar_pct) }}%;"></div>
+    </div>
+    <div class="weekday-value">{{ bar.total | money }}</div>
+  </div>
+  {% endfor %}
+</section>

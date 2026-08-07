@@ -1,0 +1,14 @@
+<header class="report-header">
+  <div class="report-header-brand">
+    <img src="assets/logo.svg" class="report-header-logo" alt="">
+    <div>
+      <div class="report-header-appname">{{ report.metadata.app_name }}</div>
+      <h1 class="report-header-title">{{ report.metadata.title }}</h1>
+      <div class="report-header-period">{{ report.metadata.period_label }}</div>
+    </div>
+  </div>
+  <div class="report-header-meta">
+    <p class="report-header-username">{{ report.metadata.full_name or report.metadata.username }}</p>
+    <p>{{ report.metadata.email }}</p>
+  </div>
+</header>

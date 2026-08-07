@@ -1,0 +1,26 @@
+<section class="section">
+  <h2 class="section-title">Category Breakdown</h2>
+  {% if report.category_breakdown and report.category_breakdown.categories %}
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Amount</th><th>Share</th><th>Expenses</th><th>Avg Expense</th></tr>
+    </thead>
+    <tbody>
+      {% for cat in report.category_breakdown.categories %}
+      <tr>
+        <td>{{ cat.name }}</td>
+        <td>{{ cat.total | money }}</td>
+        <td>
+          <div class="bar-track"><div class="bar-fill" style="width: {{ '%.1f'|format(cat.percentage) }}%;"></div></div>
+          <span class="pct-label">{{ "%.1f"|format(cat.percentage) }}%</span>
+        </td>
+        <td>{{ cat.expense_count }}</td>
+        <td>{{ cat.average_expense | money }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="note">No expenses recorded for this period.</p>
+  {% endif %}
+</section>

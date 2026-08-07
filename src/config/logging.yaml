@@ -124,6 +124,8 @@ loggers:
     <<: *noisy
     level: ERROR
   sqlalchemy.engine:      *noisy
+  weasyprint:              *noisy
+  fontTools:               *noisy
 
 # ── Root logger ───────────────────────────────────────────────────────
 root:

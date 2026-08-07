@@ -1,0 +1,14 @@
+{% from "partials/_line_chart_macro.html" import line_chart %}
+{% from "partials/_bar_chart_macro.html" import bar_chart %}
+<section class="section">
+  <h2 class="section-title">{{ report.primary_trend_title }}</h2>
+  {% if report.primary_trend_chart %}
+    {% if report.metadata.report_type == "yearly" %}
+      {{ bar_chart(report.primary_trend_chart) }}
+    {% else %}
+      {{ line_chart(report.primary_trend_chart) }}
+    {% endif %}
+  {% else %}
+    <p class="note">No spending data available for this period.</p>
+  {% endif %}
+</section>
