@@ -82,6 +82,7 @@ ignore = [
 "src/lifespan.py" = ["ARG001"]
 # Enum member name, not a credential.
 "src/modules/users/models.py" = ["S105"]
+"src/modules/notifications/enums.py" = ["S105"]
 # Cookie *names* (not secrets) and SQLAlchemy TypeDecorator's required `dialect` param.
 "src/core/app_config.py" = ["S105"]
 "src/core/database.py" = ["ARG002"]

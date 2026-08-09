@@ -1,12 +1,17 @@
 """`user_router`: authentication, password management, and profile endpoints."""
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from src.core.app_config import settings
+from src.core.logger import get_logger
 from src.core.rate_limit import limiter
 from src.core.responses import SuccessResponse
+from src.modules.notifications.dependencies import get_notification_service
+from src.modules.notifications.enums import NotificationPriority, NotificationType
+from src.modules.notifications.service import NotificationService
 from src.modules.users.dependencies import (
     CurrentUser,
     get_device_context,
@@ -35,6 +40,32 @@ from src.modules.users.schemas import (
 from src.modules.users.service import DeviceContext, TokenIssue, UserService
 
 user_router = APIRouter(prefix="/api/users", tags=["users"])
+
+logger = get_logger(__name__)
+
+
+# ── Notification helpers ─────────────────────────────────────────────────
+
+
+async def _notify_password_changed(
+    notification_service: NotificationService, user_id: uuid.UUID, message: str
+) -> None:
+    """Best-effort: `notification_service.send()` shares this request's
+    transaction with `UserService.change_password`/`reset_password` (both
+    only flush, `get_db_session` commits once at the end) — an unhandled
+    exception here would roll back an already-successful password change
+    along with it. A failure to notify must never undo a successful one.
+    """
+    try:
+        await notification_service.send(
+            user_id=user_id,
+            type=NotificationType.PASSWORD_CHANGED,
+            title="Password Changed",
+            message=message,
+            priority=NotificationPriority.HIGH,
+        )
+    except Exception:
+        logger.exception("password_changed_notification.failed", user_id=str(user_id))
 
 
 # ── Cookie helpers ────────────────────────────────────────────────────────
@@ -126,9 +157,7 @@ async def resend_otp(
     user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> SuccessResponse[None]:
     await user_service.resend_otp(data.email, purpose=OTPPurpose.SIGNUP)
-    return SuccessResponse(
-        message="If an account with that email exists, a new OTP has been sent."
-    )
+    return SuccessResponse(message="If an account with that email exists, a new OTP has been sent.")
 
 
 # ── Login / tokens ────────────────────────────────────────────────────────
@@ -281,8 +310,15 @@ async def reset_password(
     response: Response,
     data: ResetPasswordRequest,
     user_service: Annotated[UserService, Depends(get_user_service)],
+    notification_service: Annotated[NotificationService, Depends(get_notification_service)],
 ) -> SuccessResponse[None]:
-    await user_service.reset_password(data)
+    user = await user_service.reset_password(data)
+    await _notify_password_changed(
+        notification_service,
+        user.id,
+        "Your Spenza password was reset successfully. If this wasn't you, contact "
+        "support immediately.",
+    )
     _clear_auth_cookies(response)
     return SuccessResponse(message="Password reset successful. Please log in again.")
 
@@ -297,8 +333,15 @@ async def change_password(
     current_user: CurrentUser,
     data: ChangePasswordRequest,
     user_service: Annotated[UserService, Depends(get_user_service)],
+    notification_service: Annotated[NotificationService, Depends(get_notification_service)],
 ) -> SuccessResponse[None]:
     await user_service.change_password(current_user, data)
+    await _notify_password_changed(
+        notification_service,
+        current_user.id,
+        "Your Spenza password was changed successfully. If this wasn't you, reset "
+        "your password immediately.",
+    )
     _clear_auth_cookies(response)
     return SuccessResponse(message="Password changed. Please log in again.")
 

@@ -38,7 +38,7 @@ from src.modules.reports.date_range_resolver import (
 )
 from src.modules.reports.exceptions import ReportGenerationFailedError
 from src.modules.reports.pdf_generator import PDFGenerator
-from src.modules.reports.schemas import ReportRequest, ReportType
+from src.modules.reports.schemas import ReportData, ReportRequest, ReportType
 from src.modules.users.models import User
 
 # Beyond this span, a custom report's calendar heatmap would need to render
@@ -88,6 +88,23 @@ class ReportService:
         self._pdf = PDFGenerator()
 
     async def generate(self, user: User, request: ReportRequest) -> StreamingResponse:
+        pdf_bytes, _data, filename = await self.generate_with_data(user, request)
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    async def generate_with_data(
+        self, user: User, request: ReportRequest
+    ) -> tuple[bytes, ReportData, str]:
+        """The same pipeline `generate()` streams to the caller, but
+        returning the raw PDF bytes and the `ReportData` used to build it
+        instead of wrapping them in a `StreamingResponse` — so
+        `notifications.jobs.report_jobs` and `POST /reports/send-now` can
+        email the exact same report (subject line, summary figures, PDF)
+        without re-deriving any of it.
+        """
         today = datetime.now(APP_TIMEZONE).date()
         resolved = resolve_date_range(request, today)
         previous = previous_period(resolved)
@@ -178,8 +195,4 @@ class ReportService:
             raise ReportGenerationFailedError() from exc
 
         filename = _report_filename(request.type, resolved)
-        return StreamingResponse(
-            iter([pdf_bytes]),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return pdf_bytes, data, filename

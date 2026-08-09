@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from src.app import app as fastapi_app
 from src.core.database import Base, get_db_session
 from src.core.exceptions import AppError
 from src.core.rate_limit import limiter
@@ -82,8 +83,6 @@ async def client(
     db_session_factory: async_sessionmaker[AsyncSession],
     email_backend: RecordingEmailBackend,
 ) -> AsyncGenerator[AsyncClient]:
-    from src.app import app as fastapi_app
-
     async def override_get_db_session() -> AsyncGenerator[AsyncSession]:
         async with db_session_factory() as session:
             try:

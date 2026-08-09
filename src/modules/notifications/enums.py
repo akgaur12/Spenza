@@ -21,8 +21,6 @@ class NotificationType(StrEnum):
 
     WELCOME = "welcome"
     REPORT_READY = "report_ready"
-    IMPORT_COMPLETED = "import_completed"
-    EXPORT_COMPLETED = "export_completed"
     RECURRING_EXPENSE_CREATED = "recurring_expense_created"
     PASSWORD_CHANGED = "password_changed"
     SYSTEM = "system"
@@ -32,7 +30,6 @@ class NotificationType(StrEnum):
     AI_INSIGHT = "ai_insight"
     SECURITY_ALERT = "security_alert"
     SUBSCRIPTION_EXPIRING = "subscription_expiring"
-    BUDGET_ALERT = "budget_alert"
     WEEKLY_SUMMARY = "weekly_summary"
 
 

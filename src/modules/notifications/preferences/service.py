@@ -23,11 +23,17 @@ from src.modules.notifications.preferences.repository import NotificationPrefere
 logger = get_logger(__name__)
 
 # The default for any `(user, notification_type)` pair with no explicit
-# row: on, shown in-app, not emailed (email delivery doesn't exist until
-# Phase 11B, so defaulting it on would silently do nothing anyway).
+# row: on, shown in-app. Email defaults off for most types (a user has to
+# opt in), except the security-sensitive types below, which default to
+# emailed too — a user should hear about these even if they've never
+# touched their notification preferences.
 _DEFAULT_ENABLED = True
 _DEFAULT_IN_APP_ENABLED = True
-_DEFAULT_EMAIL_ENABLED = False
+_EMAIL_ENABLED_BY_DEFAULT_TYPES = frozenset({NotificationType.PASSWORD_CHANGED})
+
+
+def _default_email_enabled(notification_type: NotificationType) -> bool:
+    return notification_type in _EMAIL_ENABLED_BY_DEFAULT_TYPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +61,7 @@ def _resolve(
             notification_type=notification_type,
             enabled=_DEFAULT_ENABLED,
             in_app_enabled=_DEFAULT_IN_APP_ENABLED,
-            email_enabled=_DEFAULT_EMAIL_ENABLED,
+            email_enabled=_default_email_enabled(notification_type),
             delivery_time=None,
             timezone=None,
             is_default=True,
@@ -105,7 +111,9 @@ class NotificationPreferenceService:
                 notification_type=notification_type,
                 enabled=updates.get("enabled", _DEFAULT_ENABLED),
                 in_app_enabled=updates.get("in_app_enabled", _DEFAULT_IN_APP_ENABLED),
-                email_enabled=updates.get("email_enabled", _DEFAULT_EMAIL_ENABLED),
+                email_enabled=updates.get(
+                    "email_enabled", _default_email_enabled(notification_type)
+                ),
                 delivery_time=updates.get("delivery_time"),
                 timezone=updates.get("timezone"),
             )

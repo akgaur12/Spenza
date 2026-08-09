@@ -22,6 +22,8 @@ from src.core.timezone import APP_TIMEZONE, local_midnight_utc
 from src.modules.expenses.models import Expense
 from src.modules.expenses.schemas import ExpenseCreate
 from src.modules.expenses.service import ExpenseService
+from src.modules.notifications.enums import NotificationType
+from src.modules.notifications.service import NotificationService
 from src.modules.recurring_expenses.enums import (
     Frequency,
     GenerationMode,
@@ -70,6 +72,7 @@ class RecurringExpenseService:
         # Composed, not subclassed or reimplemented — every expense this
         # module creates goes through here.
         self._expenses = ExpenseService(session)
+        self._notifications = NotificationService(session)
 
     # ── CRUD ──────────────────────────────────────────────────────────────
 
@@ -311,6 +314,7 @@ class RecurringExpenseService:
                 expense_id=str(expense.id),
                 user_id=str(user.id),
             )
+            await self._notify_expense_created(recurring, user, expense)
         else:
             logger.info(
                 "recurring_expense.reminder_skipped",
@@ -327,3 +331,29 @@ class RecurringExpenseService:
 
         await self._recurring.flush()
         return expense
+
+    async def _notify_expense_created(
+        self, recurring: RecurringExpense, user: User, expense: Expense
+    ) -> None:
+        """Best-effort: a notification failure must never undo the expense
+        this row just generated. `process_due_recurrences` wraps each row
+        in its own `SAVEPOINT` (see there) — an unhandled exception here
+        would roll that row's expense + schedule advancement back right
+        along with it, indistinguishable from a genuine generation failure.
+        `run_now_for_user` shares the request's own uncommitted transaction,
+        with the same risk.
+        """
+        try:
+            await self._notifications.send(
+                user_id=user.id,
+                type=NotificationType.RECURRING_EXPENSE_CREATED,
+                title="Recurring Expense Created",
+                message=f"{recurring.description} — ₹{expense.amount} was added automatically.",
+                payload={"amount": str(expense.amount), "category_name": expense.category.name},
+            )
+        except Exception:
+            logger.exception(
+                "recurring_expense.notification_failed",
+                recurring_expense_id=str(recurring.id),
+                expense_id=str(expense.id),
+            )

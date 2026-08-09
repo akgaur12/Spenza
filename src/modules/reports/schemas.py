@@ -38,6 +38,11 @@ class ReportFormat(StrEnum):
     PDF = "pdf"
 
 
+class SendReportNowResponse(BaseModel):
+    sent_to: str
+    filename: str
+
+
 # ── Request ───────────────────────────────────────────────────────────────
 
 

@@ -11,6 +11,10 @@ from sqlalchemy import text
 from src.core.app_config import settings
 from src.core.database import AsyncSessionLocal, engine
 from src.core.logger import get_logger
+from src.modules.notifications.scheduler import (
+    shutdown_scheduler as shutdown_notification_scheduler,
+)
+from src.modules.notifications.scheduler import start_scheduler as start_notification_scheduler
 from src.modules.recurring_expenses.scheduler import shutdown_scheduler, start_scheduler
 from src.modules.users.service import cleanup_expired_otps
 
@@ -59,9 +63,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     cleanup_task = asyncio.create_task(_otp_cleanup_loop())
     start_scheduler()
+    start_notification_scheduler()
 
     yield
 
+    shutdown_notification_scheduler()
     shutdown_scheduler()
 
     cleanup_task.cancel()

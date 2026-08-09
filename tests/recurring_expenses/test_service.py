@@ -12,7 +12,7 @@ internals (already covered by `tests/expenses`).
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -22,6 +22,8 @@ from src.core.timezone import APP_TIMEZONE
 from src.modules.categories.exceptions import CategoryNotFoundError
 from src.modules.expenses.models import Expense
 from src.modules.expenses.schemas import ExpenseCreate
+from src.modules.notifications.enums import NotificationType
+from src.modules.notifications.models import Notification
 from src.modules.recurring_expenses.enums import (
     Frequency,
     GenerationMode,
@@ -904,3 +906,192 @@ async def test_scheduler_reminder_mode_never_calls_expense_service(
         await service.process_due_recurrences()
 
         mock_expenses.create_for_user.assert_not_awaited()
+
+
+# ── notifications ─────────────────────────────────────────────────────────
+
+
+async def test_run_now_creates_a_recurring_expense_created_notification(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = uuid.UUID(await category_id_by_name(client, "Food"))
+    session, service, user = await _get_user_and_service(db_session_factory)
+    async with session:
+        recurring = await service.create_for_user(
+            user,
+            RecurringExpenseCreate(
+                category_id=food_id,
+                description="Netflix Subscription",
+                amount=Decimal("649.00"),
+                frequency=Frequency.MONTHLY,
+                generation_mode=GenerationMode.AUTO,
+                start_date=date(2026, 8, 1),
+            ),
+        )
+        await service.run_now_for_user(recurring.id, user)
+
+        notifications = (
+            (
+                await session.execute(
+                    select(Notification).where(
+                        Notification.user_id == user.id,
+                        Notification.type == NotificationType.RECURRING_EXPENSE_CREATED,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(notifications) == 1
+        notification = notifications[0]
+        assert notification.title == "Recurring Expense Created"
+        assert notification.message == "Netflix Subscription — ₹649.00 was added automatically."
+        assert notification.payload == {"amount": "649.00", "category_name": "Food"}
+
+
+async def test_run_now_in_reminder_mode_does_not_create_a_notification(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = uuid.UUID(await category_id_by_name(client, "Food"))
+    session, service, user = await _get_user_and_service(db_session_factory)
+    async with session:
+        recurring = await service.create_for_user(
+            user,
+            RecurringExpenseCreate(
+                category_id=food_id,
+                description="Rent reminder",
+                amount=Decimal("15000.00"),
+                frequency=Frequency.MONTHLY,
+                generation_mode=GenerationMode.REMINDER,
+                start_date=date(2026, 8, 1),
+            ),
+        )
+        await service.run_now_for_user(recurring.id, user)
+
+        notifications = (
+            (await session.execute(select(Notification).where(Notification.user_id == user.id)))
+            .scalars()
+            .all()
+        )
+        assert notifications == []
+
+
+async def test_process_due_recurrences_creates_a_notification_for_the_generated_expense(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    today = datetime.now(APP_TIMEZONE).date()
+    await login_user_a(client, email_backend)
+    food_id = uuid.UUID(await category_id_by_name(client, "Food"))
+    session, service, user = await _get_user_and_service(db_session_factory)
+    async with session:
+        await service.create_for_user(
+            user,
+            RecurringExpenseCreate(
+                category_id=food_id,
+                description="Netflix",
+                amount=Decimal("649.00"),
+                frequency=Frequency.DAILY,
+                generation_mode=GenerationMode.AUTO,
+                start_date=today,
+            ),
+        )
+
+        summary = await service.process_due_recurrences()
+        assert summary.generated == 1
+
+        notifications = (
+            (
+                await session.execute(
+                    select(Notification).where(
+                        Notification.user_id == user.id,
+                        Notification.type == NotificationType.RECURRING_EXPENSE_CREATED,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(notifications) == 1
+
+
+async def test_notification_failure_does_not_block_run_now_expense_generation(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await login_user_a(client, email_backend)
+    food_id = uuid.UUID(await category_id_by_name(client, "Food"))
+    session, service, user = await _get_user_and_service(db_session_factory)
+    async with session:
+        recurring = await service.create_for_user(
+            user,
+            RecurringExpenseCreate(
+                category_id=food_id,
+                description="Netflix Subscription",
+                amount=Decimal("649.00"),
+                frequency=Frequency.MONTHLY,
+                generation_mode=GenerationMode.AUTO,
+                start_date=date(2026, 8, 1),
+            ),
+        )
+
+        with patch(
+            "src.modules.notifications.service.NotificationService.send",
+            new=AsyncMock(side_effect=RuntimeError("simulated notification-layer failure")),
+        ):
+            updated = await service.run_now_for_user(recurring.id, user)
+
+        assert updated.last_run_date == date(2026, 8, 1)
+        result = await session.execute(select(Expense).where(Expense.user_id == user.id))
+        expenses = result.scalars().all()
+        assert len(expenses) == 1
+        assert expenses[0].description == "Netflix Subscription"
+
+
+async def test_notification_failure_does_not_roll_back_the_scheduler_row(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The scheduler wraps each row in its own `SAVEPOINT` — an unhandled
+    notification failure would roll that row's expense + schedule
+    advancement back right along with it, and mark the row `failed` rather
+    than `generated`. This proves `_notify_expense_created`'s try/except
+    keeps that from happening.
+    """
+    today = datetime.now(APP_TIMEZONE).date()
+    await login_user_a(client, email_backend)
+    food_id = uuid.UUID(await category_id_by_name(client, "Food"))
+    session, service, user = await _get_user_and_service(db_session_factory)
+    async with session:
+        await service.create_for_user(
+            user,
+            RecurringExpenseCreate(
+                category_id=food_id,
+                description="Netflix",
+                amount=Decimal("649.00"),
+                frequency=Frequency.DAILY,
+                generation_mode=GenerationMode.AUTO,
+                start_date=today,
+            ),
+        )
+
+        with patch(
+            "src.modules.notifications.service.NotificationService.send",
+            new=AsyncMock(side_effect=RuntimeError("simulated notification-layer failure")),
+        ):
+            summary = await service.process_due_recurrences()
+
+        assert summary.generated == 1
+        assert summary.failed == 0
+
+        result = await session.execute(select(Expense).where(Expense.user_id == user.id))
+        assert len(result.scalars().all()) == 1

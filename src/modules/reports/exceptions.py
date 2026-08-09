@@ -6,7 +6,7 @@ Row/field-level request shape is enforced by Pydantic on `ReportRequest`
 report service can detect.
 """
 
-from src.core.exceptions import BadRequestError, InternalServerError
+from src.core.exceptions import BadRequestError, InternalServerError, ServiceUnavailableError
 
 
 class MissingReportFieldsError(BadRequestError):
@@ -49,3 +49,9 @@ class ReportGenerationFailedError(InternalServerError):
     """PDF rendering failed unexpectedly."""
 
     error_code = "REPORT_GENERATION_FAILED"
+
+
+class ReportEmailDeliveryFailedError(ServiceUnavailableError):
+    """The report was generated but could not be emailed after every retry."""
+
+    error_code = "REPORT_EMAIL_DELIVERY_FAILED"

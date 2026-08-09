@@ -117,6 +117,33 @@ class Settings(BaseSettings):
     RECURRING_EXPENSE_SCHEDULER_HOUR: int = 1
     RECURRING_EXPENSE_SCHEDULER_MINUTE: int = 0
 
+    # ── Scheduled email delivery (notifications) ────────────────────────
+    # Retry/backoff for a single email send — see `EmailDeliveryService`.
+    # Attempt N sleeps `EMAIL_RETRY_BASE_DELAY_SECONDS * 2**(N-1)` before
+    # the next try; after `EMAIL_MAX_RETRIES` failures delivery is logged
+    # as failed and abandoned rather than blocking future notifications.
+    EMAIL_MAX_RETRIES: int = 3
+    EMAIL_RETRY_BASE_DELAY_SECONDS: float = 2.0
+    # How often the safety-net sweep re-attempts any notification email
+    # that never resolved to SUCCESS or exhausted FAILED — see
+    # `notifications.jobs.notification_jobs`.
+    NOTIFICATION_EMAIL_JOB_INTERVAL_MINUTES: int = 60
+    # The monthly/yearly report jobs run once a day (in `APP_TIMEZONE`) and
+    # only actually generate/send a report on the configured day (and, for
+    # yearly, month) — see `notifications.jobs.report_jobs`.
+    MONTHLY_REPORT_SCHEDULER_HOUR: int = 6
+    MONTHLY_REPORT_SCHEDULER_MINUTE: int = 0
+    MONTHLY_REPORT_DELIVERY_DAY: int = 1
+    YEARLY_REPORT_SCHEDULER_HOUR: int = 6
+    YEARLY_REPORT_SCHEDULER_MINUTE: int = 30
+    YEARLY_REPORT_DELIVERY_DAY: int = 1
+    YEARLY_REPORT_DELIVERY_MONTH: int = 1
+    NOTIFICATION_CLEANUP_SCHEDULER_HOUR: int = 3
+    NOTIFICATION_CLEANUP_SCHEDULER_MINUTE: int = 0
+    # `notification_delivery_logs` rows older than this are purged daily —
+    # see `notifications.jobs.cleanup_jobs`.
+    DELIVERY_LOG_RETENTION_DAYS: int = 90
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins_list(self) -> list[str]:

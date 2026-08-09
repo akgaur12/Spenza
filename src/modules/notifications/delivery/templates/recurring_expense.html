@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}New recurring expense created{% endblock %}
+{% block content %}
+  <p style="margin-top:0;">Hi {{ username }},</p>
+  <p>{{ message }}</p>
+  {% if payload and payload.get("amount") is not none %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+    <tr>
+      <td style="padding:8px 0;color:#6b7280;">Amount</td>
+      <td align="right" style="padding:8px 0;font-weight:600;">{{ payload.get("amount") }}</td>
+    </tr>
+    {% if payload.get("category_name") %}
+    <tr>
+      <td style="padding:8px 0;color:#6b7280;">Category</td>
+      <td align="right" style="padding:8px 0;">{{ payload.get("category_name") }}</td>
+    </tr>
+    {% endif %}
+    {% if payload.get("frequency") %}
+    <tr>
+      <td style="padding:8px 0;color:#6b7280;">Frequency</td>
+      <td align="right" style="padding:8px 0;">{{ payload.get("frequency") }}</td>
+    </tr>
+    {% endif %}
+  </table>
+  {% endif %}
+{% endblock %}
