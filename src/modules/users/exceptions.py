@@ -5,6 +5,7 @@ from src.core.exceptions import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    ServiceUnavailableError,
     TooManyRequestsError,
     UnauthorizedError,
 )
@@ -128,3 +129,11 @@ class CannotModifyOwnAccountError(BadRequestError):
     """An admin cannot deactivate or delete their own account via this API."""
 
     error_code = "CANNOT_MODIFY_OWN_ACCOUNT"
+
+
+class AccountDataExportFailedError(ServiceUnavailableError):
+    """The pre-deletion expense-data export email could not be delivered
+    after every retry; the account was not deleted.
+    """
+
+    error_code = "ACCOUNT_DATA_EXPORT_FAILED"

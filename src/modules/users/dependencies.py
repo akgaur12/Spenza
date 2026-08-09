@@ -8,6 +8,8 @@ from user_agents import parse as parse_user_agent
 
 from src.core.app_config import settings
 from src.core.database import get_db_session
+from src.modules.notifications.dependencies import get_email_delivery_service
+from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
 from src.modules.users.exceptions import AdminPrivilegesRequiredError, InvalidAccessTokenError
 from src.modules.users.models import User, UserRole
 from src.modules.users.service import DeviceContext, UserService
@@ -15,8 +17,9 @@ from src.modules.users.service import DeviceContext, UserService
 
 def get_user_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    email_delivery_service: Annotated[EmailDeliveryService, Depends(get_email_delivery_service)],
 ) -> UserService:
-    return UserService(session)
+    return UserService(session, email_delivery_service=email_delivery_service)
 
 
 def get_device_context(request: Request) -> DeviceContext:

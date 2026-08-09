@@ -1,10 +1,18 @@
 """Integration tests for the /api/admin/users endpoints."""
 
+from fastapi import Depends
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.app_config import settings
+from src.core.database import get_db_session
+from src.modules.notifications.dependencies import get_email_delivery_service
+from src.modules.notifications.enums import DeliveryChannel, DeliveryLogStatus
+from src.modules.notifications.models import NotificationDeliveryLog
+from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
 from tests.conftest import RecordingEmailBackend, promote_to_admin, register_verified_user
+from tests.notifications.fakes import RecordingEmailProvider
 
 ADMIN_CREDENTIALS = {"email": "admin@example.com", "password": "SecureP@ss1"}
 ADMIN_SIGNUP_PAYLOAD = {**ADMIN_CREDENTIALS, "username": "admin_user"}
@@ -185,6 +193,70 @@ async def test_admin_delete_user(
 
     get_response = await client.get(f"/api/admin/users/{target['id']}")
     assert get_response.status_code == 404
+
+
+async def test_admin_delete_user_emails_expense_data_export_to_target_first(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
+
+    delete_response = await client.delete(f"/api/admin/users/{target['id']}")
+    assert delete_response.status_code == 200, delete_response.text
+
+    async with db_session_factory() as session:
+        logs = (
+            (
+                await session.execute(
+                    select(NotificationDeliveryLog).where(
+                        NotificationDeliveryLog.channel == DeliveryChannel.EMAIL
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(logs) == 1
+        assert logs[0].status is DeliveryLogStatus.SUCCESS
+
+
+async def test_admin_delete_user_is_blocked_when_export_email_fails(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from src.app import app as fastapi_app
+
+    await _login_as_admin(client, email_backend, db_session_factory)
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
+
+    async def override_get_email_delivery_service(
+        session: AsyncSession = Depends(get_db_session),
+    ) -> EmailDeliveryService:
+        return EmailDeliveryService(
+            session,
+            RecordingEmailProvider(always_fail=True),
+            max_retries=1,
+            retry_base_delay_seconds=0,
+        )
+
+    fastapi_app.dependency_overrides[get_email_delivery_service] = (
+        override_get_email_delivery_service
+    )
+    try:
+        delete_response = await client.delete(f"/api/admin/users/{target['id']}")
+        assert delete_response.status_code == 503
+        assert delete_response.json()["error_code"] == "ACCOUNT_DATA_EXPORT_FAILED"
+    finally:
+        fastapi_app.dependency_overrides.pop(get_email_delivery_service, None)
+
+    # The target account must still exist — deletion must not have proceeded.
+    get_response = await client.get(f"/api/admin/users/{target['id']}")
+    assert get_response.status_code == 200
 
 
 # ── Self-lockout guard ───────────────────────────────────────────────────

@@ -31,7 +31,12 @@ from src.core.security import (
     verify_password,
     verify_refresh_token,
 )
+from src.modules.import_export.export_service import ExportService
+from src.modules.notifications.delivery.provider import EmailAttachment
+from src.modules.notifications.delivery.templates import render_template
+from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
 from src.modules.users.exceptions import (
+    AccountDataExportFailedError,
     AccountInactiveError,
     AccountLockedError,
     CannotModifyOwnAccountError,
@@ -88,10 +93,17 @@ class TokenIssue:
 
 
 class UserService:
-    def __init__(self, session: AsyncSession, email_service: EmailService | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        email_service: EmailService | None = None,
+        email_delivery_service: EmailDeliveryService | None = None,
+    ) -> None:
         self._session = session
         self._users = UserRepository(session)
         self._refresh_sessions = RefreshSessionRepository(session)
+        self._export = ExportService(session)
+        self._email_delivery = email_delivery_service or EmailDeliveryService(session)
         self._otps = EmailOTPRepository(session)
         self._email = email_service or get_email_service()
 
@@ -403,8 +415,40 @@ class UserService:
     async def delete_user(self, user: User, current_password: str) -> None:
         if not verify_password(current_password, user.password_hash):
             raise InvalidCredentialsError(message="Current password is incorrect")
+        await self._send_account_data_export(user)
         await self._users.delete(user)
         logger.info("user.deleted", user_id=str(user.id))
+
+    async def _send_account_data_export(self, user: User) -> None:
+        """Emails the user a full XLSX export of their expense data before
+        an irreversible account deletion. Unlike other, best-effort
+        notifications (password-changed, recurring-expense-created), a
+        failure here must block the deletion rather than being swallowed —
+        deleting the account anyway would silently destroy data with no
+        way to recover it. Raises `AccountDataExportFailedError` (503) if
+        delivery is not confirmed after every retry.
+        """
+        body, filename, content_type = await self._export.export_bytes(
+            user,
+            export_format="xlsx",
+            start_date=None,
+            end_date=None,
+            category_ids=None,
+            min_amount=None,
+            max_amount=None,
+            search=None,
+        )
+        html_body = render_template(
+            "account_deletion_export.html", username=user.full_name or user.username
+        )
+        delivered = await self._email_delivery.send(
+            to=user.email,
+            subject="Your Spenza expense data (account deletion)",
+            html_body=html_body,
+            attachments=[EmailAttachment(filename=filename, content=body, mime_type=content_type)],
+        )
+        if not delivered:
+            raise AccountDataExportFailedError()
 
     # ── Admin ─────────────────────────────────────────────────────────────
 
@@ -443,6 +487,7 @@ class UserService:
         if user_id == acting_admin_id:
             raise CannotModifyOwnAccountError()
         user = await self.get_user_by_id(user_id)
+        await self._send_account_data_export(user)
         await self._users.delete(user)
         logger.info("admin.user.deleted", user_id=str(user.id))
 

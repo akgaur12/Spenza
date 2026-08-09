@@ -61,6 +61,39 @@ class ExportService:
         max_amount: Decimal | None,
         search: str | None,
     ) -> StreamingResponse:
+        body, filename, content_type = await self.export_bytes(
+            user,
+            export_format=export_format,
+            start_date=start_date,
+            end_date=end_date,
+            category_ids=category_ids,
+            min_amount=min_amount,
+            max_amount=max_amount,
+            search=search,
+        )
+        return StreamingResponse(
+            iter([body]),
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    async def export_bytes(
+        self,
+        user: User,
+        *,
+        export_format: ExportFormat,
+        start_date: date | None,
+        end_date: date | None,
+        category_ids: list[uuid.UUID] | None,
+        min_amount: Decimal | None,
+        max_amount: Decimal | None,
+        search: str | None,
+    ) -> tuple[bytes, str, str]:
+        """The same pipeline `export()` streams to the caller, but returning
+        the raw bytes/filename/content-type instead of wrapping them in a
+        `StreamingResponse` — so `UserService`'s pre-deletion data export can
+        email the exact same file a manual `/export` call would download.
+        """
         expenses = await self._expenses.list_for_export(
             user.id,
             category_ids=category_ids,
@@ -90,8 +123,4 @@ class ExportService:
             body = build_pdf_export(rows, start_date=start_date, end_date=end_date)
 
         filename = _export_filename(export_format, user.username, start_date, end_date)
-        return StreamingResponse(
-            iter([body]),
-            media_type=_CONTENT_TYPES[export_format],
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return body, filename, _CONTENT_TYPES[export_format]

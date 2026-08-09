@@ -17,6 +17,8 @@ from src.app import app as fastapi_app
 from src.core.database import Base, get_db_session
 from src.core.exceptions import AppError
 from src.core.rate_limit import limiter
+from src.modules.notifications.dependencies import get_email_delivery_service
+from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
 from src.modules.users.dependencies import get_user_service
 from src.modules.users.models import UserRole
 from src.modules.users.repository import UserRepository
@@ -98,8 +100,9 @@ async def client(
 
     async def override_get_user_service(
         session: AsyncSession = Depends(override_get_db_session),
+        email_delivery_service: EmailDeliveryService = Depends(get_email_delivery_service),
     ) -> UserService:
-        return UserService(session, EmailService(backend=email_backend))
+        return UserService(session, EmailService(backend=email_backend), email_delivery_service)
 
     fastapi_app.dependency_overrides[get_db_session] = override_get_db_session
     fastapi_app.dependency_overrides[get_user_service] = override_get_user_service
