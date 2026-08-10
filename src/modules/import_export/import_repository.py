@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.import_export.models import ImportSession, ImportSessionStatus
@@ -65,6 +65,16 @@ class ImportSessionRepository:
             .values(status=ImportSessionStatus.CONFIRMED)
         )
         return bool(cast(CursorResult[Any], result).rowcount)
+
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        """Bulk-delete rows that expired before `cutoff` — used by
+        `core.cleanup` to enforce `IMPORT_SESSION_RETENTION_DAYS`. Based on
+        `expires_at` (when the row became unusable), not `created_at`.
+        """
+        result = await self._session.execute(
+            delete(ImportSession).where(ImportSession.expires_at < cutoff)
+        )
+        return cast(CursorResult[Any], result).rowcount or 0
 
     async def flush(self) -> None:
         await self._session.flush()

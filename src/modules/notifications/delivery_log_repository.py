@@ -2,7 +2,7 @@
 
 Same rules as `NotificationRepository`: no business logic here, just plain
 CRUD/query translation. `EmailDeliveryService` writes one row per delivery
-*attempt* through this repository; `jobs.cleanup_jobs` uses it to enforce
+*attempt* through this repository; `core.cleanup` uses it to enforce
 `DELIVERY_LOG_RETENTION_DAYS`.
 """
 
@@ -44,7 +44,7 @@ class NotificationDeliveryLogRepository:
         self._session.add(log)
         return log
 
-    async def delete_created_before(self, cutoff: datetime) -> int:
+    async def delete_older_than(self, cutoff: datetime) -> int:
         """Bulk-delete stale rows in one statement — never fetch-then-loop,
         since a busy deployment could accumulate many thousands of them.
         """

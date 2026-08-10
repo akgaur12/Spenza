@@ -6,8 +6,9 @@ rules, no HTTP concerns. `UserService` composes these to implement behavior.
 
 import uuid
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import CursorResult, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.users.models import EmailOTP, OTPPurpose, RefreshSession, User, UserRole
@@ -72,6 +73,20 @@ class UserRepository:
         )
         return result.scalar_one()
 
+    async def delete_unverified_older_than(self, cutoff: datetime) -> int:
+        """Bulk-delete accounts that never completed signup verification —
+        used by `core.cleanup` to enforce `USER_UNVERIFIED_RETENTION_DAYS`.
+        A verified account is never touched regardless of age. Relies on
+        the `ON DELETE CASCADE` foreign keys from `email_otps`,
+        `refresh_sessions`, etc. (real DB-level constraints, not just the
+        ORM-side `cascade="all, delete-orphan"`, which only fires on a
+        session-tracked `session.delete()`, not a bulk statement like this).
+        """
+        result = await self._session.execute(
+            delete(User).where(User.is_verified.is_(False), User.created_at < cutoff)
+        )
+        return cast(CursorResult[Any], result).rowcount or 0
+
 
 class RefreshSessionRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -125,6 +140,24 @@ class RefreshSessionRepository:
             .values(revoked=True)
         )
 
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        """Bulk-delete sessions that have been dead (revoked, or past
+        `expires_at`) since before `cutoff` — used by `core.cleanup` to
+        enforce `REFRESH_SESSION_RETENTION_DAYS`. A still-valid session is
+        never touched regardless of age. `updated_at` is what moves when a
+        session is revoked (`revoke`/`revoke_all_for_user` above), so it
+        marks how long ago a revoked session actually died.
+        """
+        result = await self._session.execute(
+            delete(RefreshSession).where(
+                or_(
+                    RefreshSession.expires_at < cutoff,
+                    (RefreshSession.revoked.is_(True)) & (RefreshSession.updated_at < cutoff),
+                )
+            )
+        )
+        return cast(CursorResult[Any], result).rowcount or 0
+
     async def flush(self) -> None:
         await self._session.flush()
 
@@ -163,7 +196,7 @@ class EmailOTPRepository:
     async def delete(self, otp: EmailOTP) -> None:
         await self._session.delete(otp)
 
-    async def delete_created_before(self, cutoff: datetime) -> int:
+    async def delete_older_than(self, cutoff: datetime) -> int:
         result = await self._session.execute(delete(EmailOTP).where(EmailOTP.created_at < cutoff))
         return result.rowcount or 0  # type: ignore[attr-defined]
 

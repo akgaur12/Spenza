@@ -509,8 +509,8 @@ async def cleanup_expired_otps(session: AsyncSession) -> int:
     window starting at verification time — later than the OTP row's own
     `expires_at`. Doubling the retention window (measured from `created_at`)
     guarantees this never deletes a row whose `reset_token` could still be
-    redeemed. Called from `scripts/cleanup_otps.py` and the weekly
-    background task in `src/lifespan.py`.
+    redeemed. Called from `scripts/cleanup.py` and the unified daily
+    housekeeping job in `src.core.cleanup`.
 
     Guarded by a Postgres advisory lock scoped to the current transaction:
     with more than one worker process (or an external cron firing at the
@@ -529,6 +529,6 @@ async def cleanup_expired_otps(session: AsyncSession) -> int:
             return 0
 
     cutoff = datetime.now(UTC) - timedelta(minutes=settings.OTP_EXPIRE_MINUTES * 2)
-    deleted = await EmailOTPRepository(session).delete_created_before(cutoff)
+    deleted = await EmailOTPRepository(session).delete_older_than(cutoff)
     await session.commit()
     return deleted

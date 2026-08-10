@@ -2,8 +2,8 @@
 
 Started/stopped from `src.lifespan` at application startup/shutdown — the
 job itself opens its own short-lived `AsyncSession` per run, the same
-pattern `src.lifespan._otp_cleanup_loop` already uses for its weekly sweep,
-so this doesn't hold a request-scoped session across a whole day. An
+pattern `src.core.cleanup.run_cleanup_job` already uses for its daily
+sweep, so this doesn't hold a request-scoped session across a whole day. An
 exception here must never stop future runs (see `run_due_recurrences_job`);
 per-row failures are already isolated inside
 `RecurringExpenseService.process_due_recurrences`.

@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import ColumnElement, CursorResult, func, select, update
+from sqlalchemy import ColumnElement, CursorResult, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -126,6 +126,17 @@ class NotificationRepository:
 
     async def delete(self, notification: Notification) -> None:
         await self._session.delete(notification)
+
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        """Bulk-delete stale rows in one statement — never fetch-then-loop,
+        since a busy deployment could accumulate many thousands of them.
+        Used by `core.cleanup` to enforce `NOTIFICATION_RETENTION_DAYS`
+        regardless of read state.
+        """
+        result = await self._session.execute(
+            delete(Notification).where(Notification.created_at < cutoff)
+        )
+        return cast(CursorResult[Any], result).rowcount or 0
 
     async def flush(self) -> None:
         await self._session.flush()

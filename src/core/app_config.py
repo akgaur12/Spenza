@@ -83,7 +83,6 @@ class Settings(BaseSettings):
     OTP_EXPIRE_MINUTES: int = 10
     OTP_MAX_ATTEMPTS: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
-    OTP_CLEANUP_INTERVAL_SECONDS: int = 7 * 24 * 3600  # weekly
 
     # ── Account lockout ────────────────────────────────────────────────
     LOGIN_MAX_FAILED_ATTEMPTS: int = 5
@@ -127,7 +126,7 @@ class Settings(BaseSettings):
     # How often the safety-net sweep re-attempts any notification email
     # that never resolved to SUCCESS or exhausted FAILED — see
     # `notifications.jobs.notification_jobs`.
-    NOTIFICATION_EMAIL_JOB_INTERVAL_MINUTES: int = 60
+    NOTIFICATION_EMAIL_JOB_INTERVAL_MINUTES: int = 360
     # The monthly/yearly report jobs run once a day (in `APP_TIMEZONE`) and
     # only actually generate/send a report on the configured day (and, for
     # yearly, month) — see `notifications.jobs.report_jobs`.
@@ -138,11 +137,32 @@ class Settings(BaseSettings):
     YEARLY_REPORT_SCHEDULER_MINUTE: int = 30
     YEARLY_REPORT_DELIVERY_DAY: int = 1
     YEARLY_REPORT_DELIVERY_MONTH: int = 1
+    # ── Data retention / cleanup ──────────────────────────────────────────
+    # A single daily job (`src.core.cleanup.run_cleanup_job`, scheduled by
+    # `notifications.scheduler` at the hour/minute below) purges every table
+    # in this section so none of them grow unbounded. `email_otps` is the
+    # one exception: its retention math is a special case (see
+    # `users.service.cleanup_expired_otps`), so it has no `_RETENTION_DAYS`
+    # setting of its own.
     NOTIFICATION_CLEANUP_SCHEDULER_HOUR: int = 3
     NOTIFICATION_CLEANUP_SCHEDULER_MINUTE: int = 0
-    # `notification_delivery_logs` rows older than this are purged daily —
-    # see `notifications.jobs.cleanup_jobs`.
+    # `notification_delivery_logs` rows older than this are purged daily.
     DELIVERY_LOG_RETENTION_DAYS: int = 90
+    # `notifications` rows (read or unread) older than this are purged daily.
+    NOTIFICATION_RETENTION_DAYS: int = 60
+    # `import_sessions` rows are already unusable `IMPORT_SESSION_EXPIRE_MINUTES`
+    # after creation; this is how much longer they're kept around (for
+    # support/debugging) before being purged.
+    IMPORT_SESSION_RETENTION_DAYS: int = 2
+    # `refresh_sessions` rows are purged this many days after they're
+    # revoked or past `expires_at` — active, valid sessions are never
+    # touched regardless of age.
+    REFRESH_SESSION_RETENTION_DAYS: int = 30
+    # `users` rows that never completed signup OTP verification are purged
+    # this many days after creation — long enough for a real user to come
+    # back and verify, short enough to free up a squatted username/email.
+    # A verified account is never touched regardless of age.
+    USER_UNVERIFIED_RETENTION_DAYS: int = 7
 
     @computed_field  # type: ignore[prop-decorator]
     @property

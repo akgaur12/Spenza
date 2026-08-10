@@ -3,7 +3,7 @@
 Mirrors `tests.recurring_expenses.test_scheduler` — only registration is
 tested here; each job's *body* is covered directly against the test
 database by `test_report_jobs.py` / `test_notification_jobs.py` /
-`test_cleanup_jobs.py`, since the job wrappers open a session via the
+`tests/core/test_cleanup.py`, since the job wrappers open a session via the
 module-level `AsyncSessionLocal` bound to the real `DATABASE_URL`, not the
 per-test SQLite database.
 """

@@ -13,9 +13,9 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.core.app_config import settings
+from src.core.cleanup import run_cleanup_job
 from src.core.logger import get_logger
 from src.core.timezone import APP_TIMEZONE
-from src.modules.notifications.jobs.cleanup_jobs import run_cleanup_job
 from src.modules.notifications.jobs.notification_jobs import run_notification_email_job
 from src.modules.notifications.jobs.report_jobs import (
     run_monthly_report_job,
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 NOTIFICATION_EMAIL_JOB_ID = "notifications.deliver_pending_emails"
 MONTHLY_REPORT_JOB_ID = "notifications.monthly_report"
 YEARLY_REPORT_JOB_ID = "notifications.yearly_report"
-CLEANUP_JOB_ID = "notifications.cleanup"
+CLEANUP_JOB_ID = "maintenance.cleanup"
 
 _scheduler: AsyncIOScheduler | None = None
 
@@ -69,6 +69,11 @@ def start_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    # Not notifications-specific despite living on this scheduler: covers
+    # email_otps, notifications, notification_delivery_logs, import_sessions,
+    # and refresh_sessions — see `src.core.cleanup`. Reuses this scheduler
+    # rather than standing up a dedicated one, since it's already the
+    # process's daily-housekeeping scheduler (reports run here too).
     scheduler.add_job(
         run_cleanup_job,
         trigger=CronTrigger(
