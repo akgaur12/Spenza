@@ -52,8 +52,9 @@ def create_app() -> FastAPI:
         version=settings.APP_VERSION,
         description=API_DESCRIPTION,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.APP_ENV == "dev" else None,
+        redoc_url="/redoc" if settings.APP_ENV == "dev" else None,
+        openapi_url="/openapi.json" if settings.APP_ENV == "dev" else None,
     )
 
     app.state.limiter = limiter
@@ -94,7 +95,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def home() -> RedirectResponse:
-        return RedirectResponse(url="/docs")
+        return RedirectResponse(url="/docs" if settings.APP_ENV == "dev" else "/health")
 
     return app
 
