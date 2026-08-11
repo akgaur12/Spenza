@@ -70,13 +70,16 @@ class Settings(BaseSettings):
     TRUSTED_HOSTS: str = "localhost,127.0.0.1"
 
     # ── Email / SMTP ───────────────────────────────────────────────────
-    EMAIL_BACKEND: Literal["console", "smtp"] = "console"
+    # "resend" sends over the Resend HTTP API instead of raw SMTP — needed on
+    # hosts (e.g. Render) that block outbound SMTP ports.
+    EMAIL_BACKEND: Literal["console", "smtp", "resend"] = "console"
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USE_TLS: bool = True
     SENDER_EMAIL: str | None = None
     SENDER_PASSWORD: str | None = None
     SENDER_NAME: str = "Spenza"
+    RESEND_API_KEY: str | None = None
 
     # ── OTP ────────────────────────────────────────────────────────────
     OTP_LENGTH: int = 6

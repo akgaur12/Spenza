@@ -15,6 +15,7 @@ import aiosmtplib
 from src.core.app_config import settings
 from src.core.logger import get_logger
 from src.modules.notifications.delivery.provider import BaseEmailProvider, EmailAttachment
+from src.modules.notifications.delivery.resend_provider import ResendProvider
 
 logger = get_logger(__name__)
 
@@ -89,4 +90,6 @@ def get_email_provider() -> BaseEmailProvider:
     """
     if settings.EMAIL_BACKEND == "smtp":
         return SMTPProvider()
+    if settings.EMAIL_BACKEND == "resend":
+        return ResendProvider()
     return ConsoleEmailProvider()

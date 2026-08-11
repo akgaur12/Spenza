@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from email.message import EmailMessage
 
 import aiosmtplib
+import httpx
 
 from src.core.app_config import settings
 from src.core.logger import get_logger
@@ -68,8 +69,35 @@ class SMTPEmailBackend(EmailBackend):
         logger.info("email.sent.smtp", to=to, subject=subject)
 
 
+class ResendEmailBackend(EmailBackend):
+    """Delivers email via the Resend HTTP API.
+
+    Goes over HTTPS rather than an SMTP port, so it works on hosts (e.g.
+    Render) that block outbound SMTP traffic.
+    """
+
+    _API_URL = "https://api.resend.com/emails"
+
+    async def send(self, *, to: str, subject: str, html_body: str) -> None:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                self._API_URL,
+                headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+                json={
+                    "from": f"{settings.SENDER_NAME} <{settings.SENDER_EMAIL}>",
+                    "to": [to],
+                    "subject": subject,
+                    "html": html_body,
+                },
+            )
+            response.raise_for_status()
+        logger.info("email.sent.resend", to=to, subject=subject)
+
+
 def get_email_backend() -> EmailBackend:
-    """Select the configured backend (`console` or `smtp`)."""
+    """Select the configured backend (`console`, `smtp`, or `resend`)."""
     if settings.EMAIL_BACKEND == "smtp":
         return SMTPEmailBackend()
+    if settings.EMAIL_BACKEND == "resend":
+        return ResendEmailBackend()
     return ConsoleEmailBackend()
