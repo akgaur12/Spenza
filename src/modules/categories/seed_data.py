@@ -8,12 +8,14 @@ migrations).
 
 DEFAULT_SYSTEM_CATEGORIES: list[tuple[str, str]] = [
     ("Food", "🍔"),
+    ("Groceries", "🛒"),
     ("Transport", "🚕"),
     ("Shopping", "🛍️"),
     ("Rent", "🏠"),
     ("Bills", "💡"),
     ("Entertainment", "🎬"),
     ("Health", "🏥"),
+    ("Personal Care", "🧴"),
     ("Education", "📚"),
     ("Travel", "✈️"),
     ("Other", "📦"),

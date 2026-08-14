@@ -30,6 +30,7 @@ bruno/
 postman/
 docs/
 notebooks/
+mydata/
 
 tests/
 Makefile

@@ -142,12 +142,12 @@ async def test_admin_create_system_category(
     await _login_as_admin(client, email_backend, db_session_factory)
 
     response = await client.post(
-        "/api/v1/admin/categories", json={"name": "Personal Care", "icon": "🧴"}
+        "/api/v1/admin/categories", json={"name": "Fitness", "icon": "🏋️"}
     )
 
     assert response.status_code == 201, response.text
     data = response.json()["data"]
-    assert data["name"] == "Personal Care"
+    assert data["name"] == "Fitness"
     assert data["is_system"] is True
     assert data["is_active"] is True
 
@@ -158,13 +158,13 @@ async def test_admin_create_system_category_visible_to_normal_users(
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _login_as_admin(client, email_backend, db_session_factory)
-    await client.post("/api/v1/admin/categories", json={"name": "Personal Care", "icon": "🧴"})
+    await client.post("/api/v1/admin/categories", json={"name": "Fitness", "icon": "🏋️"})
 
     await _login_as_plain_user(client, email_backend)
     response = await client.get("/api/v1/categories")
 
     names = {i["name"] for i in response.json()["data"]["items"]}
-    assert "Personal Care" in names
+    assert "Fitness" in names
 
 
 async def test_admin_create_rejects_duplicate_system_category(
@@ -192,13 +192,13 @@ async def test_admin_can_update_system_category(
     food = await _admin_find_by_name(client, "Food")
 
     response = await client.patch(
-        f"/api/v1/admin/categories/{food['id']}", json={"name": "Groceries", "icon": "🛒"}
+        f"/api/v1/admin/categories/{food['id']}", json={"name": "Gadgets", "icon": "🔌"}
     )
 
     assert response.status_code == 200, response.text
     data = response.json()["data"]
-    assert data["name"] == "Groceries"
-    assert data["icon"] == "🛒"
+    assert data["name"] == "Gadgets"
+    assert data["icon"] == "🔌"
 
 
 async def test_admin_can_deactivate_system_category_via_patch(
