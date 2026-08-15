@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.logger import get_logger
 from src.modules.notifications.delivery.base import BaseNotificationChannel
 from src.modules.notifications.delivery.provider import BaseEmailProvider
-from src.modules.notifications.delivery.templates import render_template
+from src.modules.notifications.delivery.templates import format_message_html, render_template
 from src.modules.notifications.enums import NotificationType
 from src.modules.notifications.models import Notification
 from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
@@ -66,7 +66,7 @@ class EmailChannel(BaseNotificationChannel):
             template_name,
             username=user.full_name or user.username,
             title=notification.title,
-            message=notification.message,
+            message=format_message_html(notification.message),
             payload=notification.payload,
         )
         await self._delivery.send(

@@ -39,6 +39,7 @@ from src.modules.users.exceptions import (
     AccountDataExportFailedError,
     AccountInactiveError,
     AccountLockedError,
+    CannotDemoteLastAdminError,
     CannotModifyOwnAccountError,
     EmailAlreadyExistsError,
     EmailNotVerifiedError,
@@ -55,7 +56,7 @@ from src.modules.users.exceptions import (
     UsernameAlreadyExistsError,
     UserNotFoundError,
 )
-from src.modules.users.models import EmailOTP, OTPPurpose, RefreshSession, User
+from src.modules.users.models import EmailOTP, OTPPurpose, RefreshSession, User, UserRole
 from src.modules.users.repository import (
     EmailOTPRepository,
     RefreshSessionRepository,
@@ -490,6 +491,40 @@ class UserService:
         await self._send_account_data_export(user)
         await self._users.delete(user)
         logger.info("admin.user.deleted", user_id=str(user.id))
+
+    async def update_user_role(self, user_id: uuid.UUID, role: UserRole) -> User:
+        """No self-modification guard here (unlike `set_user_active`/
+        `delete_user_by_admin`): demoting yourself doesn't lock you out of
+        your own account, only of the admin API, and another admin can
+        always re-promote you. The only thing actually guarded against —
+        same as the CLI's `demote_admin` — is demoting the *last* admin,
+        which would lock everyone out of the admin API entirely.
+        """
+        user = await self.get_user_by_id(user_id)
+        is_demotion = user.role is UserRole.ADMIN and role is UserRole.USER
+        if is_demotion and await self._users.count_by_role(UserRole.ADMIN) <= 1:
+            raise CannotDemoteLastAdminError()
+        user.role = role
+        await self._users.flush()
+        logger.info("admin.user.role_changed", user_id=str(user.id), role=str(role))
+        return user
+
+    async def list_sessions_for_user(self, user_id: uuid.UUID) -> list[RefreshSession]:
+        await self.get_user_by_id(user_id)
+        return await self._refresh_sessions.list_active_for_user(user_id)
+
+    async def admin_revoke_sessions(self, user_id: uuid.UUID) -> int:
+        await self.get_user_by_id(user_id)
+        revoked = await self._refresh_sessions.revoke_all_for_user(user_id)
+        await self._refresh_sessions.flush()
+        logger.info("admin.user.sessions_revoked", user_id=str(user_id), revoked=revoked)
+        return revoked
+
+    async def list_active_user_ids(self) -> list[uuid.UUID]:
+        return await self._users.list_active_ids()
+
+    async def get_many_by_id(self, user_ids: set[uuid.UUID]) -> dict[uuid.UUID, User]:
+        return await self._users.get_many_by_id(user_ids)
 
 
 # ── Maintenance ───────────────────────────────────────────────────────────

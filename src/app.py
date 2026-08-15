@@ -20,6 +20,7 @@ from src.core.exception_handlers import register_exception_handlers  # noqa: E40
 from src.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware  # noqa: E402
 from src.core.rate_limit import limiter  # noqa: E402
 from src.lifespan import lifespan  # noqa: E402
+from src.modules.admin.router import admin_stats_router  # noqa: E402
 from src.modules.analytics.router import analytics_router  # noqa: E402
 from src.modules.categories.admin_router import admin_category_router  # noqa: E402
 from src.modules.categories.router import category_router  # noqa: E402
@@ -27,6 +28,8 @@ from src.modules.dashboard.router import dashboard_router  # noqa: E402
 from src.modules.expenses.router import expense_router  # noqa: E402
 from src.modules.health.router import health_router  # noqa: E402
 from src.modules.import_export.router import export_router, import_router  # noqa: E402
+from src.modules.notifications.admin_email_router import admin_email_router  # noqa: E402
+from src.modules.notifications.admin_router import admin_notification_router  # noqa: E402
 from src.modules.notifications.router import (  # noqa: E402
     notification_preference_router,
     notification_router,
@@ -91,6 +94,9 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(notification_router)
     app.include_router(notification_preference_router)
+    app.include_router(admin_notification_router)
+    app.include_router(admin_email_router)
+    app.include_router(admin_stats_router)
     app.include_router(health_router)
 
     @app.get("/", include_in_schema=False)

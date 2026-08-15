@@ -141,9 +141,7 @@ async def test_admin_create_system_category(
 ) -> None:
     await _login_as_admin(client, email_backend, db_session_factory)
 
-    response = await client.post(
-        "/api/v1/admin/categories", json={"name": "Fitness", "icon": "🏋️"}
-    )
+    response = await client.post("/api/v1/admin/categories", json={"name": "Fitness", "icon": "🏋️"})
 
     assert response.status_code == 201, response.text
     data = response.json()["data"]

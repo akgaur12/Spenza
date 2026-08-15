@@ -131,6 +131,14 @@ class CannotModifyOwnAccountError(BadRequestError):
     error_code = "CANNOT_MODIFY_OWN_ACCOUNT"
 
 
+class CannotDemoteLastAdminError(BadRequestError):
+    """Refuses to demote the only remaining admin, to avoid locking everyone
+    out of the admin API.
+    """
+
+    error_code = "CANNOT_DEMOTE_LAST_ADMIN"
+
+
 class AccountDataExportFailedError(ServiceUnavailableError):
     """The pre-deletion expense-data export email could not be delivered
     after every retry; the account was not deleted.

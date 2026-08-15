@@ -64,9 +64,7 @@ async def test_resend_otp_within_cooldown_rejected(
 ) -> None:
     await client.post("/api/users/signup", json=SIGNUP_PAYLOAD)
 
-    response = await client.post(
-        "/api/users/resend-otp", json={"email": SIGNUP_PAYLOAD["email"]}
-    )
+    response = await client.post("/api/users/resend-otp", json={"email": SIGNUP_PAYLOAD["email"]})
 
     assert response.status_code == 429
     assert response.json()["error_code"] == "OTP_RESEND_COOLDOWN"
@@ -87,9 +85,7 @@ async def test_resend_otp_already_verified_user_does_not_send(
     await register_verified_user(client, email_backend, SIGNUP_PAYLOAD)
     email_backend.sent.clear()
 
-    response = await client.post(
-        "/api/users/resend-otp", json={"email": SIGNUP_PAYLOAD["email"]}
-    )
+    response = await client.post("/api/users/resend-otp", json={"email": SIGNUP_PAYLOAD["email"]})
 
     assert response.status_code == 200
     assert len(email_backend.sent) == 0

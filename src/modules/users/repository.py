@@ -73,6 +73,15 @@ class UserRepository:
         )
         return result.scalar_one()
 
+    async def list_active_ids(self) -> list[uuid.UUID]:
+        """IDs of every active, verified user — used to resolve an admin
+        broadcast's "everyone" target without loading full `User` rows.
+        """
+        result = await self._session.execute(
+            select(User.id).where(User.is_active.is_(True), User.is_verified.is_(True))
+        )
+        return list(result.scalars().all())
+
     async def delete_unverified_older_than(self, cutoff: datetime) -> int:
         """Bulk-delete accounts that never completed signup verification —
         used by `core.cleanup` to enforce `USER_UNVERIFIED_RETENTION_DAYS`.
@@ -133,12 +142,13 @@ class RefreshSessionRepository:
     async def revoke(self, session_row: RefreshSession) -> None:
         session_row.revoked = True
 
-    async def revoke_all_for_user(self, user_id: uuid.UUID) -> None:
-        await self._session.execute(
+    async def revoke_all_for_user(self, user_id: uuid.UUID) -> int:
+        result = await self._session.execute(
             update(RefreshSession)
             .where(RefreshSession.user_id == user_id, RefreshSession.revoked.is_(False))
             .values(revoked=True)
         )
+        return cast(CursorResult[Any], result).rowcount or 0
 
     async def delete_older_than(self, cutoff: datetime) -> int:
         """Bulk-delete sessions that have been dead (revoked, or past

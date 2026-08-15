@@ -1,4 +1,7 @@
-"""Integration tests for the /api/admin/users endpoints."""
+"""Integration tests for the /api/v1/admin/users endpoints."""
+
+import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends
 from httpx import AsyncClient
@@ -7,10 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.app_config import settings
 from src.core.database import get_db_session
+from src.core.security import generate_refresh_token, hash_refresh_token
 from src.modules.notifications.dependencies import get_email_delivery_service
 from src.modules.notifications.enums import DeliveryChannel, DeliveryLogStatus
 from src.modules.notifications.models import NotificationDeliveryLog
 from src.modules.notifications.services.email_delivery_service import EmailDeliveryService
+from src.modules.users.repository import RefreshSessionRepository
 from tests.conftest import RecordingEmailBackend, promote_to_admin, register_verified_user
 from tests.notifications.fakes import RecordingEmailProvider
 
@@ -44,7 +49,7 @@ async def _find_user_by_email(client: AsyncClient, email: str) -> dict[str, str]
     """List every user as the currently-authenticated admin and return the
     one matching `email`.
     """
-    list_response = await client.get("/api/admin/users")
+    list_response = await client.get("/api/v1/admin/users")
     return next(u for u in list_response.json()["data"]["items"] if u["email"] == email)
 
 
@@ -52,7 +57,7 @@ async def _find_user_by_email(client: AsyncClient, email: str) -> dict[str, str]
 
 
 async def test_list_users_requires_authentication(client: AsyncClient) -> None:
-    response = await client.get("/api/admin/users")
+    response = await client.get("/api/v1/admin/users")
     assert response.status_code == 401
     assert response.json()["error_code"] == "INVALID_ACCESS_TOKEN"
 
@@ -63,7 +68,7 @@ async def test_list_users_rejects_non_admin(
     await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
     await client.post("/api/users/login", json=PLAIN_LOGIN_PAYLOAD)
 
-    response = await client.get("/api/admin/users")
+    response = await client.get("/api/v1/admin/users")
 
     assert response.status_code == 403
     assert response.json()["error_code"] == "ADMIN_PRIVILEGES_REQUIRED"
@@ -80,7 +85,7 @@ async def test_list_users_returns_all_users_paginated(
     await _login_as_admin(client, email_backend, db_session_factory)
     await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
 
-    response = await client.get("/api/admin/users", params={"page": 1, "page_size": 20})
+    response = await client.get("/api/v1/admin/users", params={"page": 1, "page_size": 20})
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -100,7 +105,7 @@ async def test_get_user_by_id_returns_full_detail(
     await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
     target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
 
-    response = await client.get(f"/api/admin/users/{target['id']}")
+    response = await client.get(f"/api/v1/admin/users/{target['id']}")
 
     assert response.status_code == 200
     assert response.json()["data"]["email"] == PLAIN_CREDENTIALS["email"]
@@ -113,7 +118,7 @@ async def test_get_user_by_id_unknown_returns_404(
 ) -> None:
     await _login_as_admin(client, email_backend, db_session_factory)
 
-    response = await client.get("/api/admin/users/00000000-0000-0000-0000-000000000000")
+    response = await client.get("/api/v1/admin/users/00000000-0000-0000-0000-000000000000")
 
     assert response.status_code == 404
     assert response.json()["error_code"] == "USER_NOT_FOUND"
@@ -132,7 +137,7 @@ async def test_deactivate_and_reactivate_user(
     target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
 
     deactivate_response = await client.patch(
-        f"/api/admin/users/{target['id']}/active", json={"is_active": False}
+        f"/api/v1/admin/users/{target['id']}/active", json={"is_active": False}
     )
     assert deactivate_response.status_code == 200
     assert deactivate_response.json()["data"]["is_active"] is False
@@ -142,7 +147,7 @@ async def test_deactivate_and_reactivate_user(
     assert login_response.json()["error_code"] == "ACCOUNT_INACTIVE"
 
     reactivate_response = await client.patch(
-        f"/api/admin/users/{target['id']}/active", json={"is_active": True}
+        f"/api/v1/admin/users/{target['id']}/active", json={"is_active": True}
     )
     assert reactivate_response.status_code == 200
     assert reactivate_response.json()["data"]["is_active"] is True
@@ -168,7 +173,7 @@ async def test_unlock_user_resets_lockout(
     assert locked_response.status_code == 429
 
     target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
-    unlock_response = await client.post(f"/api/admin/users/{target['id']}/unlock")
+    unlock_response = await client.post(f"/api/v1/admin/users/{target['id']}/unlock")
     assert unlock_response.status_code == 200
     assert unlock_response.json()["data"]["locked_until"] is None
 
@@ -188,10 +193,10 @@ async def test_admin_delete_user(
     await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
     target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
 
-    delete_response = await client.delete(f"/api/admin/users/{target['id']}")
+    delete_response = await client.delete(f"/api/v1/admin/users/{target['id']}")
     assert delete_response.status_code == 200
 
-    get_response = await client.get(f"/api/admin/users/{target['id']}")
+    get_response = await client.get(f"/api/v1/admin/users/{target['id']}")
     assert get_response.status_code == 404
 
 
@@ -204,7 +209,7 @@ async def test_admin_delete_user_emails_expense_data_export_to_target_first(
     await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
     target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
 
-    delete_response = await client.delete(f"/api/admin/users/{target['id']}")
+    delete_response = await client.delete(f"/api/v1/admin/users/{target['id']}")
     assert delete_response.status_code == 200, delete_response.text
 
     async with db_session_factory() as session:
@@ -248,14 +253,14 @@ async def test_admin_delete_user_is_blocked_when_export_email_fails(
         override_get_email_delivery_service
     )
     try:
-        delete_response = await client.delete(f"/api/admin/users/{target['id']}")
+        delete_response = await client.delete(f"/api/v1/admin/users/{target['id']}")
         assert delete_response.status_code == 503
         assert delete_response.json()["error_code"] == "ACCOUNT_DATA_EXPORT_FAILED"
     finally:
         fastapi_app.dependency_overrides.pop(get_email_delivery_service, None)
 
     # The target account must still exist — deletion must not have proceeded.
-    get_response = await client.get(f"/api/admin/users/{target['id']}")
+    get_response = await client.get(f"/api/v1/admin/users/{target['id']}")
     assert get_response.status_code == 200
 
 
@@ -272,7 +277,9 @@ async def test_admin_cannot_deactivate_own_account(
     me_response = await client.get("/api/users/me")
     admin_id = me_response.json()["data"]["id"]
 
-    response = await client.patch(f"/api/admin/users/{admin_id}/active", json={"is_active": False})
+    response = await client.patch(
+        f"/api/v1/admin/users/{admin_id}/active", json={"is_active": False}
+    )
 
     assert response.status_code == 400
     assert response.json()["error_code"] == "CANNOT_MODIFY_OWN_ACCOUNT"
@@ -288,7 +295,129 @@ async def test_admin_cannot_delete_own_account(
     me_response = await client.get("/api/users/me")
     admin_id = me_response.json()["data"]["id"]
 
-    response = await client.delete(f"/api/admin/users/{admin_id}")
+    response = await client.delete(f"/api/v1/admin/users/{admin_id}")
 
     assert response.status_code == 400
     assert response.json()["error_code"] == "CANNOT_MODIFY_OWN_ACCOUNT"
+
+
+# ── Role management ──────────────────────────────────────────────────────
+
+
+async def test_admin_promotes_user_to_admin(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
+
+    response = await client.patch(
+        f"/api/v1/admin/users/{target['id']}/role", json={"role": "admin"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["role"] == "admin"
+
+
+async def test_admin_can_demote_self_when_other_admins_exist(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    other = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
+    await client.patch(f"/api/v1/admin/users/{other['id']}/role", json={"role": "admin"})
+
+    me_response = await client.get("/api/users/me")
+    admin_id = me_response.json()["data"]["id"]
+
+    response = await client.patch(f"/api/v1/admin/users/{admin_id}/role", json={"role": "user"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["role"] == "user"
+
+
+async def test_admin_cannot_demote_the_last_admin(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+
+    me_response = await client.get("/api/users/me")
+    admin_id = me_response.json()["data"]["id"]
+
+    response = await client.patch(f"/api/v1/admin/users/{admin_id}/role", json={"role": "user"})
+
+    assert response.status_code == 400
+    assert response.json()["error_code"] == "CANNOT_DEMOTE_LAST_ADMIN"
+
+
+async def test_update_user_role_requires_admin(
+    client: AsyncClient, email_backend: RecordingEmailBackend
+) -> None:
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    await client.post("/api/users/login", json=PLAIN_LOGIN_PAYLOAD)
+
+    response = await client.patch(
+        "/api/v1/admin/users/00000000-0000-0000-0000-000000000000/role", json={"role": "admin"}
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error_code"] == "ADMIN_PRIVILEGES_REQUIRED"
+
+
+# ── Session management ───────────────────────────────────────────────────
+
+
+async def test_admin_lists_and_revokes_user_sessions(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+    await register_verified_user(client, email_backend, PLAIN_SIGNUP_PAYLOAD)
+    target = await _find_user_by_email(client, PLAIN_CREDENTIALS["email"])
+
+    # Two sessions created directly in the DB (as two devices would produce)
+    # rather than by logging in through `client` — that would hijack the
+    # shared cookie jar and sign the admin out of their own session.
+    async with db_session_factory() as session:
+        sessions = RefreshSessionRepository(session)
+        for device in ("Device 1", "Device 2"):
+            sessions.create(
+                user_id=uuid.UUID(target["id"]),
+                refresh_token_hash=hash_refresh_token(generate_refresh_token()),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
+                device=device,
+                ip_address="127.0.0.1",
+                user_agent="pytest",
+            )
+        await session.commit()
+
+    list_response = await client.get(f"/api/v1/admin/users/{target['id']}/sessions")
+    assert list_response.status_code == 200, list_response.text
+    assert len(list_response.json()["data"]["items"]) == 2
+
+    revoke_response = await client.delete(f"/api/v1/admin/users/{target['id']}/sessions")
+    assert revoke_response.status_code == 200, revoke_response.text
+    assert revoke_response.json()["data"]["revoked"] == 2
+
+    empty_list_response = await client.get(f"/api/v1/admin/users/{target['id']}/sessions")
+    assert empty_list_response.json()["data"]["items"] == []
+
+
+async def test_admin_sessions_unknown_user_returns_404(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _login_as_admin(client, email_backend, db_session_factory)
+
+    response = await client.get("/api/v1/admin/users/00000000-0000-0000-0000-000000000000/sessions")
+
+    assert response.status_code == 404
+    assert response.json()["error_code"] == "USER_NOT_FOUND"

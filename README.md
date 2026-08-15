@@ -63,7 +63,7 @@ Dual-token, cookie-based — the "stay signed in like ChatGPT/Claude" pattern:
 ### Admin access
 
 Every user has a `role`: `user` (default) or `admin`. There's no signup-time
-way to become an admin — promote an existing account from the CLI:
+way to become an admin — the *first* admin must be promoted from the CLI:
 
 ```bash
 make promote-admin EMAIL=someone@example.com
@@ -76,9 +76,12 @@ make demote-admin EMAIL=someone@example.com
 ```
 
 This refuses if they're the only admin left, so you can't accidentally lock
-yourself out of the admin API entirely.
+yourself out of the admin API entirely. Once at least one admin exists, roles
+can also be changed by another admin via
+`PATCH /api/v1/admin/users/{id}/role` — same last-admin guard, plus an admin
+can never change their own role.
 
-Admin-only routes (`/api/admin/users/...`) sit behind the same access-token
+Admin-only routes (`/api/v1/admin/...`) sit behind the same access-token
 cookie as everything else, plus a role check — a non-admin gets `403
 ADMIN_PRIVILEGES_REQUIRED`, an unauthenticated request gets `401`.
 
@@ -158,10 +161,22 @@ All routes are under `/api/users` and return the envelope
 `PATCH /update-username` · `PATCH /update-profile` · `DELETE /delete-user` ·
 `GET /profile`
 
-**Admin** (under `/api/admin/users`, requires the `admin` role — see
+**Admin** (all under `/api/v1/admin/...`, requires the `admin` role — see
 [Admin access](#admin-access) below)
-`GET /` (list, paginated) · `GET /{id}` · `PATCH /{id}/active` ·
-`POST /{id}/unlock` · `DELETE /{id}`
+
+- Users (`/api/v1/admin/users`): `GET /` (list, paginated) · `GET /{id}` ·
+  `PATCH /{id}/active` · `PATCH /{id}/role` · `POST /{id}/unlock` ·
+  `GET /{id}/sessions` · `DELETE /{id}/sessions` (force logout everywhere) ·
+  `DELETE /{id}`
+- Categories (`/api/v1/admin/categories`): `GET /` · `POST /` ·
+  `PATCH /{id}` · `DELETE /{id}`
+- Notifications (`/api/v1/admin/notifications`): `POST /broadcast` ·
+  `GET /delivery-logs`
+- Email (`/api/v1/admin/email`): `GET /config` (backend/sender, secrets
+  redacted) · `POST /send` (send a custom email directly to one or more
+  specific users, bypassing notification preferences)
+- Stats (`/api/v1/admin/stats`): `GET /overview` — system-wide counts across
+  users, expenses, categories, and notifications
 
 Import `postman/Spenza.postman_collection.json` or open `bruno/` in Bruno to
 try every endpoint — both include example request bodies and a `baseUrl`

@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, delete
+from sqlalchemy import ColumnElement, CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.notifications.enums import DeliveryChannel, DeliveryLogStatus
@@ -43,6 +43,32 @@ class NotificationDeliveryLogRepository:
         )
         self._session.add(log)
         return log
+
+    async def list_recent(
+        self,
+        *,
+        status: DeliveryLogStatus | None,
+        channel: DeliveryChannel | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[NotificationDeliveryLog], int]:
+        conditions: list[ColumnElement[bool]] = []
+        if status is not None:
+            conditions.append(NotificationDeliveryLog.status == status)
+        if channel is not None:
+            conditions.append(NotificationDeliveryLog.channel == channel)
+
+        total = await self._session.scalar(
+            select(func.count()).select_from(NotificationDeliveryLog).where(*conditions)
+        )
+        result = await self._session.execute(
+            select(NotificationDeliveryLog)
+            .where(*conditions)
+            .order_by(NotificationDeliveryLog.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.scalars().all()), total or 0
 
     async def delete_older_than(self, cutoff: datetime) -> int:
         """Bulk-delete stale rows in one statement — never fetch-then-loop,

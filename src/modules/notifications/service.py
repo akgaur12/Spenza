@@ -20,15 +20,17 @@ from src.core.logger import get_logger
 from src.modules.notifications.delivery.base import BaseNotificationChannel
 from src.modules.notifications.delivery.email import EmailChannel
 from src.modules.notifications.delivery.in_app import InAppChannel
+from src.modules.notifications.delivery_log_repository import NotificationDeliveryLogRepository
 from src.modules.notifications.enums import (
     DeliveryChannel,
+    DeliveryLogStatus,
     NotificationPriority,
     NotificationSortField,
     NotificationType,
     SortOrder,
 )
 from src.modules.notifications.exceptions import NotificationNotFoundError
-from src.modules.notifications.models import Notification
+from src.modules.notifications.models import Notification, NotificationDeliveryLog
 from src.modules.notifications.preferences.service import NotificationPreferenceService
 from src.modules.notifications.repository import NotificationRepository
 
@@ -38,6 +40,7 @@ logger = get_logger(__name__)
 class NotificationService:
     def __init__(self, session: AsyncSession) -> None:
         self._notifications = NotificationRepository(session)
+        self._delivery_logs = NotificationDeliveryLogRepository(session)
         self._preferences = NotificationPreferenceService(session)
         self._channels: dict[DeliveryChannel, BaseNotificationChannel] = {
             DeliveryChannel.IN_APP: InAppChannel(),
@@ -151,4 +154,52 @@ class NotificationService:
         await self._notifications.flush()
         logger.info(
             "notification.deleted", notification_id=str(notification_id), user_id=str(user_id)
+        )
+
+    # ── Admin ─────────────────────────────────────────────────────────────
+
+    async def broadcast(
+        self,
+        *,
+        user_ids: list[uuid.UUID],
+        type: NotificationType,  # noqa: A002 — matches `send()`'s parameter name
+        title: str,
+        message: str,
+        priority: NotificationPriority = NotificationPriority.NORMAL,
+    ) -> tuple[int, int]:
+        """Send the same notification to every user in `user_ids`, reusing
+        `send()` so each recipient's own preferences (enabled/in-app/email)
+        are still respected. Returns `(sent, skipped)` — `skipped` counts
+        recipients who have this `type` disabled entirely.
+        """
+        sent = 0
+        skipped = 0
+        for user_id in user_ids:
+            result = await self.send(
+                user_id=user_id, type=type, title=title, message=message, priority=priority
+            )
+            if result is None:
+                skipped += 1
+            else:
+                sent += 1
+        logger.info(
+            "notification.broadcast",
+            notification_type=str(type),
+            targeted=len(user_ids),
+            sent=sent,
+            skipped=skipped,
+        )
+        return sent, skipped
+
+    async def list_delivery_logs(
+        self,
+        *,
+        status: DeliveryLogStatus | None,
+        channel: DeliveryChannel | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[NotificationDeliveryLog], int]:
+        offset = (page - 1) * page_size
+        return await self._delivery_logs.list_recent(
+            status=status, channel=channel, offset=offset, limit=page_size
         )

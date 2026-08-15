@@ -18,7 +18,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from src.core.responses import SuccessResponse
-from src.modules.notifications.delivery.templates import render_template
+from src.modules.notifications.delivery.templates import format_message_html, render_template
 from src.modules.notifications.dependencies import (
     get_email_delivery_service,
     get_notification_preference_service,
@@ -161,7 +161,7 @@ async def send_test_email(
         "generic_notification.html",
         username=current_user.full_name or current_user.username,
         title="Test Email",
-        message=(
+        message=format_message_html(
             "This is a test email from Spenza to verify your email delivery "
             "configuration is working correctly."
         ),

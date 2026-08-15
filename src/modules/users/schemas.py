@@ -227,3 +227,17 @@ class SetUserActiveRequest(BaseModel):
     is_active: bool
 
     model_config = ConfigDict(json_schema_extra={"example": {"is_active": False}})
+
+
+class UpdateUserRoleRequest(BaseModel):
+    role: UserRole
+
+    model_config = ConfigDict(json_schema_extra={"example": {"role": "admin"}})
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionInfo]
+
+
+class RevokedSessionsResponse(BaseModel):
+    revoked: int

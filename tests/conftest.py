@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from src.app import app as fastapi_app
+from src.core.app_config import settings
 from src.core.database import Base, get_db_session
 from src.core.exceptions import AppError
 from src.core.rate_limit import limiter
@@ -33,6 +34,22 @@ def _disable_rate_limiting() -> None:
     otherwise leak between tests. Not the behavior under test here.
     """
     limiter.enabled = False
+
+
+@pytest.fixture(autouse=True)
+def _force_console_email_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`EmailDeliveryService` and `EmailService` both read
+    `settings.EMAIL_BACKEND` fresh on every construction, so whatever a
+    developer's local `.env` has set (e.g. `EMAIL_BACKEND=resend` while
+    testing that integration by hand, with a real API key) would otherwise
+    leak into the suite and make real network calls to a live provider.
+    Forcing it here keeps every send on the network-free console backend
+    regardless of `.env`. Individual tests that need to exercise the
+    smtp/resend selection logic itself (see `test_provider.py`,
+    `test_backend.py`) still override it with their own `monkeypatch`, which
+    layers on top of this and unwinds first.
+    """
+    monkeypatch.setattr(settings, "EMAIL_BACKEND", "console")
 
 
 OTP_PATTERN = re.compile(r"<!-- OTP:(\d+) -->")
