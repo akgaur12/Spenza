@@ -14,8 +14,14 @@ from src.shared.email.backend import (
     ConsoleEmailBackend,
     ResendEmailBackend,
     SMTPEmailBackend,
+    _html_to_text,
     get_email_backend,
 )
+
+
+def test_html_to_text_strips_tags_and_collapses_blank_lines() -> None:
+    html = "<p>Hi Akash,</p>\n\n\n<p>Your code is <strong>123456</strong>.</p>"
+    assert _html_to_text(html) == "Hi Akash,\n\nYour code is 123456."
 
 
 async def test_console_backend_never_touches_the_network() -> None:
@@ -49,6 +55,7 @@ async def test_resend_backend_posts_to_resend_api() -> None:
         assert url == "https://api.resend.com/emails"
         assert kwargs["json"]["to"] == ["user@example.com"]
         assert kwargs["json"]["subject"] == "Test subject"
+        assert kwargs["json"]["text"] == "Hello"
 
 
 async def test_resend_backend_propagates_send_failures() -> None:

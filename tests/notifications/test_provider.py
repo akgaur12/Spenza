@@ -12,7 +12,7 @@ import pytest
 
 from src.core.app_config import settings
 from src.modules.notifications.delivery.provider import EmailAttachment
-from src.modules.notifications.delivery.resend_provider import ResendProvider
+from src.modules.notifications.delivery.resend_provider import ResendProvider, _html_to_text
 from src.modules.notifications.delivery.smtp_provider import (
     ConsoleEmailProvider,
     SMTPProvider,
@@ -95,7 +95,13 @@ async def test_resend_provider_posts_to_resend_api() -> None:
         assert url == "https://api.resend.com/emails"
         assert kwargs["json"]["to"] == ["user@example.com"]
         assert kwargs["json"]["subject"] == "Test subject"
+        assert kwargs["json"]["text"] == "Hello"
         assert "attachments" not in kwargs["json"]
+
+
+def test_html_to_text_strips_tags_and_collapses_blank_lines() -> None:
+    html = "<p>Hi Akash,</p>\n\n\n<p>Your code is <strong>123456</strong>.</p>"
+    assert _html_to_text(html) == "Hi Akash,\n\nYour code is 123456."
 
 
 async def test_resend_provider_attaches_files_as_base64() -> None:

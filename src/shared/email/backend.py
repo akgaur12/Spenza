@@ -18,6 +18,17 @@ from src.core.logger import get_logger
 logger = get_logger(__name__)
 
 _OTP_MARKER_RE = re.compile(r"<!-- OTP:(\d+) -->")
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _html_to_text(html: str) -> str:
+    """Crude plaintext fallback for the multipart alternative a raw-HTML send
+    would otherwise lack — templates are our own trusted Jinja output, not
+    third-party HTML, so a tag-stripping regex is enough here. A missing
+    text/plain part is itself a minor spam-filter signal.
+    """
+    text = _TAG_RE.sub("", html)
+    return re.sub(r"\n\s*\n+", "\n\n", text).strip()
 
 
 class EmailBackend(ABC):
@@ -88,6 +99,7 @@ class ResendEmailBackend(EmailBackend):
                     "to": [to],
                     "subject": subject,
                     "html": html_body,
+                    "text": _html_to_text(html_body),
                 },
             )
             response.raise_for_status()
