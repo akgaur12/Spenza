@@ -65,8 +65,10 @@ async def test_email_config_reports_backend_without_leaking_secrets(
     assert data["backend"] == "console"
     assert data["sender_name"] == "Spenza"
     assert "resend_api_key" not in data
+    assert "mailjet_api_secret" not in data
     assert "sender_password" not in data
     assert isinstance(data["resend_configured"], bool)
+    assert isinstance(data["mailjet_configured"], bool)
 
 
 # ── Send ─────────────────────────────────────────────────────────────────

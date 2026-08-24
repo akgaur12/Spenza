@@ -14,6 +14,7 @@ import aiosmtplib
 
 from src.core.app_config import settings
 from src.core.logger import get_logger
+from src.modules.notifications.delivery.mailjet_provider import MailjetProvider
 from src.modules.notifications.delivery.provider import BaseEmailProvider, EmailAttachment
 from src.modules.notifications.delivery.resend_provider import ResendProvider
 
@@ -52,7 +53,7 @@ class SMTPProvider(BaseEmailProvider):
         attachments: list[EmailAttachment] | None = None,
     ) -> None:
         message = EmailMessage()
-        message["From"] = f"{settings.SENDER_NAME} <{settings.SENDER_EMAIL}>"
+        message["From"] = f"{settings.SENDER_NAME} <{settings.SMTP_SENDER_EMAIL}>"
         message["To"] = to
         message["Subject"] = subject
         message.set_content("This email requires an HTML-capable client.")
@@ -72,7 +73,7 @@ class SMTPProvider(BaseEmailProvider):
             hostname=settings.SMTP_SERVER,
             port=settings.SMTP_PORT,
             start_tls=settings.SMTP_USE_TLS,
-            username=settings.SENDER_EMAIL,
+            username=settings.SMTP_SENDER_EMAIL,
             password=settings.SENDER_PASSWORD,
         )
         logger.info(
@@ -92,4 +93,6 @@ def get_email_provider() -> BaseEmailProvider:
         return SMTPProvider()
     if settings.EMAIL_BACKEND == "resend":
         return ResendProvider()
+    if settings.EMAIL_BACKEND == "mailjet":
+        return MailjetProvider()
     return ConsoleEmailProvider()

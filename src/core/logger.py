@@ -197,11 +197,11 @@ def _load_dict_config(config_path: Path) -> dict[str, Any]:
         handlers.pop("app_file", None)
         handlers.pop("error_file", None)
 
-    email_configured = bool(settings.SENDER_EMAIL and settings.SENDER_PASSWORD)
+    email_configured = bool(settings.SMTP_SENDER_EMAIL and settings.SENDER_PASSWORD)
     if email_configured:
-        handlers["email"]["credentials"] = [settings.SENDER_EMAIL, settings.SENDER_PASSWORD]
-        handlers["email"]["fromaddr"] = settings.SENDER_EMAIL
-        handlers["email"]["toaddrs"] = [settings.SENDER_EMAIL]
+        handlers["email"]["credentials"] = [settings.SMTP_SENDER_EMAIL, settings.SENDER_PASSWORD]
+        handlers["email"]["fromaddr"] = settings.SMTP_SENDER_EMAIL
+        handlers["email"]["toaddrs"] = [settings.SMTP_SENDER_EMAIL]
         handlers["email"]["mailhost"] = [settings.SMTP_SERVER, settings.SMTP_PORT]
         active.append("email")
     else:

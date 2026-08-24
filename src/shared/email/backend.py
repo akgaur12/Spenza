@@ -63,7 +63,7 @@ class SMTPEmailBackend(EmailBackend):
 
     async def send(self, *, to: str, subject: str, html_body: str) -> None:
         message = EmailMessage()
-        message["From"] = f"{settings.SENDER_NAME} <{settings.SENDER_EMAIL}>"
+        message["From"] = f"{settings.SENDER_NAME} <{settings.SMTP_SENDER_EMAIL}>"
         message["To"] = to
         message["Subject"] = subject
         message.set_content("This email requires an HTML-capable client.")
@@ -74,7 +74,7 @@ class SMTPEmailBackend(EmailBackend):
             hostname=settings.SMTP_SERVER,
             port=settings.SMTP_PORT,
             start_tls=settings.SMTP_USE_TLS,
-            username=settings.SENDER_EMAIL,
+            username=settings.SMTP_SENDER_EMAIL,
             password=settings.SENDER_PASSWORD,
         )
         logger.info("email.sent.smtp", to=to, subject=subject)
@@ -95,7 +95,7 @@ class ResendEmailBackend(EmailBackend):
                 self._API_URL,
                 headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
                 json={
-                    "from": f"{settings.SENDER_NAME} <{settings.SENDER_EMAIL}>",
+                    "from": f"{settings.SENDER_NAME} <{settings.RESEND_SENDER_EMAIL}>",
                     "to": [to],
                     "subject": subject,
                     "html": html_body,
@@ -106,10 +106,45 @@ class ResendEmailBackend(EmailBackend):
         logger.info("email.sent.resend", to=to, subject=subject)
 
 
+class MailjetEmailBackend(EmailBackend):
+    """Delivers email via the Mailjet Send API v3.1.
+
+    Goes over HTTPS rather than an SMTP port, so it works on hosts (e.g.
+    Render) that block outbound SMTP traffic.
+    """
+
+    _API_URL = "https://api.mailjet.com/v3.1/send"
+
+    async def send(self, *, to: str, subject: str, html_body: str) -> None:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                self._API_URL,
+                auth=(settings.MAILJET_API_KEY or "", settings.MAILJET_API_SECRET or ""),
+                json={
+                    "Messages": [
+                        {
+                            "From": {
+                                "Email": settings.MAILJET_SENDER_EMAIL,
+                                "Name": settings.SENDER_NAME,
+                            },
+                            "To": [{"Email": to}],
+                            "Subject": subject,
+                            "HTMLPart": html_body,
+                            "TextPart": _html_to_text(html_body),
+                        }
+                    ]
+                },
+            )
+            response.raise_for_status()
+        logger.info("email.sent.mailjet", to=to, subject=subject)
+
+
 def get_email_backend() -> EmailBackend:
-    """Select the configured backend (`console`, `smtp`, or `resend`)."""
+    """Select the configured backend (`console`, `smtp`, `resend`, or `mailjet`)."""
     if settings.EMAIL_BACKEND == "smtp":
         return SMTPEmailBackend()
     if settings.EMAIL_BACKEND == "resend":
         return ResendEmailBackend()
+    if settings.EMAIL_BACKEND == "mailjet":
+        return MailjetEmailBackend()
     return ConsoleEmailBackend()

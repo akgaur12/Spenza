@@ -70,16 +70,24 @@ class Settings(BaseSettings):
     TRUSTED_HOSTS: str = "localhost,127.0.0.1"
 
     # ── Email / SMTP ───────────────────────────────────────────────────
-    # "resend" sends over the Resend HTTP API instead of raw SMTP — needed on
-    # hosts (e.g. Render) that block outbound SMTP ports.
-    EMAIL_BACKEND: Literal["console", "smtp", "resend"] = "console"
+    # "resend"/"mailjet" send over an HTTP API instead of raw SMTP — needed
+    # on hosts (e.g. Render) that block outbound SMTP ports.
+    # Each backend has its own sender address since each requires its sender
+    # domain/mailbox to be independently verified with that provider — e.g.
+    # SMTP_SENDER_EMAIL might be a Gmail address while RESEND_SENDER_EMAIL is
+    # on a domain verified in the Resend dashboard.
+    EMAIL_BACKEND: Literal["console", "smtp", "resend", "mailjet"] = "console"
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USE_TLS: bool = True
-    SENDER_EMAIL: str | None = None
+    SMTP_SENDER_EMAIL: str | None = None
     SENDER_PASSWORD: str | None = None
     SENDER_NAME: str = "Spenza"
     RESEND_API_KEY: str | None = None
+    RESEND_SENDER_EMAIL: str | None = None
+    MAILJET_API_KEY: str | None = None
+    MAILJET_API_SECRET: str | None = None
+    MAILJET_SENDER_EMAIL: str | None = None
 
     # ── OTP ────────────────────────────────────────────────────────────
     OTP_LENGTH: int = 6
@@ -176,6 +184,19 @@ class Settings(BaseSettings):
     @property
     def trusted_hosts_list(self) -> list[str]:
         return [host.strip() for host in self.TRUSTED_HOSTS.split(",") if host.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def active_sender_email(self) -> str | None:
+        """The sender address for whichever backend `EMAIL_BACKEND` selects —
+        each backend has its own, since each requires independent domain
+        verification with that provider.
+        """
+        return {
+            "smtp": self.SMTP_SENDER_EMAIL,
+            "resend": self.RESEND_SENDER_EMAIL,
+            "mailjet": self.MAILJET_SENDER_EMAIL,
+        }.get(self.EMAIL_BACKEND)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

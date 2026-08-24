@@ -186,8 +186,9 @@ def delivery_log_to_response(log: NotificationDeliveryLog) -> DeliveryLogRespons
 
 class EmailConfigResponse(BaseModel):
     """Current email delivery configuration. Secrets (`SENDER_PASSWORD`,
-    `RESEND_API_KEY`) are never included — only whether Resend has a key
-    configured at all.
+    `RESEND_API_KEY`, `MAILJET_API_SECRET`) are never included — only
+    whether each HTTP-API backend has credentials configured at all.
+    `sender_email` is whichever backend `EMAIL_BACKEND` currently selects.
     """
 
     backend: str
@@ -197,6 +198,7 @@ class EmailConfigResponse(BaseModel):
     smtp_port: int
     smtp_use_tls: bool
     resend_configured: bool
+    mailjet_configured: bool
     max_retries: int
     retry_base_delay_seconds: float
 

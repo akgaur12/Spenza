@@ -40,11 +40,12 @@ async def get_email_config(_admin: AdminUser) -> SuccessResponse[EmailConfigResp
         data=EmailConfigResponse(
             backend=settings.EMAIL_BACKEND,
             sender_name=settings.SENDER_NAME,
-            sender_email=settings.SENDER_EMAIL,
+            sender_email=settings.active_sender_email,
             smtp_server=settings.SMTP_SERVER,
             smtp_port=settings.SMTP_PORT,
             smtp_use_tls=settings.SMTP_USE_TLS,
             resend_configured=settings.RESEND_API_KEY is not None,
+            mailjet_configured=settings.MAILJET_API_KEY is not None,
             max_retries=settings.EMAIL_MAX_RETRIES,
             retry_base_delay_seconds=settings.EMAIL_RETRY_BASE_DELAY_SECONDS,
         ),
