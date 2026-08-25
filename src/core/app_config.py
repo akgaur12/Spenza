@@ -13,6 +13,13 @@ from typing import Literal
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# `ai_assistant.enums` has no dependency on `src.core` (a dependency-free
+# leaf module, like every other module's `enums.py`), so importing it here
+# to type `AI_DEFAULT_PROVIDER` cannot create an import cycle — deliberate,
+# so the DB column type and the settings default share one enum instead of
+# a settings-level `Literal` that could drift from it.
+from src.modules.ai_assistant.enums import LLMProvider
+
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 LOGGING_CONFIG_PATH = ROOT_DIR / "src" / "config" / "logging.yaml"
 
@@ -174,6 +181,31 @@ class Settings(BaseSettings):
     # back and verify, short enough to free up a squatted username/email.
     # A verified account is never touched regardless of age.
     USER_UNVERIFIED_RETENTION_DAYS: int = 7
+
+    # ── AI Assistant ───────────────────────────────────────────────────
+    AI_DEFAULT_PROVIDER: LLMProvider = LLMProvider.OLLAMA
+    AI_DEFAULT_MODEL: str = "llama3.1:8b"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    AWS_BEDROCK_REGION: str | None = None
+    AWS_BEDROCK_ACCESS_KEY_ID: str | None = None
+    AWS_BEDROCK_SECRET_ACCESS_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    NVIDIA_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    HUGGINGFACE_API_KEY: str | None = None
+    OPEN_ROUTER_API_KEY: str | None = None
+    # Wall-clock budgets so a slow/unreachable provider or tool can never
+    # hang a request indefinitely — see `agent.runner.AgentRunner`.
+    AI_LLM_TIMEOUT_SECONDS: float = 30.0
+    AI_TOOL_TIMEOUT_SECONDS: float = 15.0
+    AI_AGENT_TIMEOUT_SECONDS: float = 90.0
+    # How many of a chat's most recent messages are loaded into the agent's
+    # context window — a flat cutoff for now; see `ChatMessageRepository.
+    # list_recent_for_context` for where summarization/long-term memory
+    # would plug in later without a schema change.
+    AI_CONTEXT_WINDOW_MESSAGES: int = 30
+    AI_CHAT_REQUESTS_PER_MINUTE: str = "10/minute"
+    AI_TITLE_GENERATION_ENABLED: bool = True
 
     @computed_field  # type: ignore[prop-decorator]
     @property

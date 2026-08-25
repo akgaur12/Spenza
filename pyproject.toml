@@ -28,6 +28,12 @@ dependencies = [
     "reportlab>=5.0.0",
     "weasyprint>=69.0",
     "apscheduler>=3.11.3",
+    "langchain-core>=1.6.0",
+    "langgraph>=1.2.11",
+    "langchain-openai>=1.6.0",
+    "langchain-ollama>=1.1.0",
+    "langchain-aws>=1.7.3",
+    "boto3>=1.43.78",
 ]
 
 [project.scripts]
@@ -77,6 +83,7 @@ ignore = [
 "scripts/**" = ["T20"]
 # slowapi requires an unused `request: Request` param on every rate-limited endpoint.
 "src/modules/users/user_router.py" = ["ARG001"]
+"src/modules/ai_assistant/router.py" = ["ARG001"]
 # FastAPI exception-handler / lifespan signatures require these unused params.
 "src/core/exception_handlers.py" = ["ARG001"]
 "src/lifespan.py" = ["ARG001"]
@@ -85,6 +92,9 @@ ignore = [
 "src/modules/notifications/enums.py" = ["S105"]
 # Cookie *names* (not secrets) and SQLAlchemy TypeDecorator's required `dialect` param.
 "src/core/app_config.py" = ["S105"]
+# `BaseChatModel._generate`/`_astream`'s required signature — LangChain calls
+# these by keyword, so unused params can't be renamed to `_`-prefixed dummies.
+"tests/ai_assistant/fakes.py" = ["ARG002"]
 "src/core/database.py" = ["ARG002"]
 
 [tool.ruff.lint.isort]
