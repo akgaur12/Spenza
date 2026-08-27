@@ -204,7 +204,12 @@ class Settings(BaseSettings):
     # list_recent_for_context` for where summarization/long-term memory
     # would plug in later without a schema change.
     AI_CONTEXT_WINDOW_MESSAGES: int = 30
-    AI_CHAT_REQUESTS_PER_MINUTE: str = "10/minute"
+    # Global default for a user's per-minute message limit, applied only
+    # when that user's own `max_messages_per_minute` override is unset —
+    # see `permissions.service.AIAssistantPermissionService`. Enforced as a
+    # per-user DB-backed check, not a slowapi rate string, since access
+    # itself is per-user and opt-in (a disabled user has no rate to limit).
+    AI_CHAT_REQUESTS_PER_MINUTE: int = 10
     AI_TITLE_GENERATION_ENABLED: bool = True
 
     @computed_field  # type: ignore[prop-decorator]

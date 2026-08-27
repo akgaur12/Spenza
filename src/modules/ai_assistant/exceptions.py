@@ -8,8 +8,10 @@ into the standard `ErrorResponse` envelope with no new wiring needed.
 from src.core.exceptions import (
     BadRequestError,
     ConflictError,
+    ForbiddenError,
     NotFoundError,
     ServiceUnavailableError,
+    TooManyRequestsError,
 )
 
 
@@ -61,3 +63,39 @@ class AgentTimeoutError(ServiceUnavailableError):
     """The agent did not finish within the configured time budget."""
 
     error_code = "AI_AGENT_TIMEOUT"
+
+
+class AIAssistantDisabledError(ForbiddenError):
+    """The current user has not been granted access to the AI assistant."""
+
+    error_code = "AI_ASSISTANT_DISABLED"
+
+
+class AIChatRateLimitedError(TooManyRequestsError):
+    """The user's per-minute message limit has been reached."""
+
+    error_code = "AI_CHAT_RATE_LIMITED"
+
+
+class AIChatDailyLimitExceededError(TooManyRequestsError):
+    """The user's per-day message limit has been reached."""
+
+    error_code = "AI_CHAT_DAILY_LIMIT_EXCEEDED"
+
+
+class AIChatMonthlyLimitExceededError(TooManyRequestsError):
+    """The user's per-month message limit has been reached."""
+
+    error_code = "AI_CHAT_MONTHLY_LIMIT_EXCEEDED"
+
+
+class AIChatDailyChatLimitExceededError(TooManyRequestsError):
+    """The user's per-day new-chat limit has been reached."""
+
+    error_code = "AI_CHAT_DAILY_CHAT_LIMIT_EXCEEDED"
+
+
+class AIChatMonthlyChatLimitExceededError(TooManyRequestsError):
+    """The user's per-month new-chat limit has been reached."""
+
+    error_code = "AI_CHAT_MONTHLY_CHAT_LIMIT_EXCEEDED"

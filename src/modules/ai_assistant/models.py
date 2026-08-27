@@ -1,9 +1,11 @@
 """ORM models for the `ai_assistant` module.
 
-Three tables: `chats` (one row per conversation), `chat_messages` (every
-user/assistant/system/tool turn in a chat, ordered by `sequence`), and
+Four tables: `chats` (one row per conversation), `chat_messages` (every
+user/assistant/system/tool turn in a chat, ordered by `sequence`),
 `chat_runs` (one row per agent execution — tracks status/timing/usage for
-the assistant message it fills in).
+the assistant message it fills in), and `ai_assistant_permissions` (one row
+per user, admin-managed, controlling whether — and how much — that user may
+use the assistant at all; see `permissions.service`).
 
 `Base.metadata` is reserved by SQLAlchemy, so the spec's `metadata` JSONB
 column on `chat_messages`/`chat_runs` is exposed as the Python attribute
@@ -16,7 +18,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    Boolean,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -133,3 +145,34 @@ class ChatRun(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"ChatRun(id={self.id}, chat_id={self.chat_id}, status={self.status})"
+
+
+class AIAssistantPermission(TimestampMixin, Base):
+    """Admin-managed access control for one user's use of the AI
+    assistant. Access is opt-in: no row (or `enabled=False`) means the
+    user may not create new chats/messages — see `permissions.service` for
+    where "no row yet" is resolved into that default. Existing chats
+    remain readable/renameable/deletable regardless of `enabled`; only
+    *new* chats/messages are gated.
+
+    Each limit is `None` = unlimited, independently configurable per user,
+    except `max_messages_per_minute`, whose `None` falls back to the
+    global `AI_CHAT_REQUESTS_PER_MINUTE` default instead (see
+    `permissions.service.AIAssistantPermissionService`).
+    """
+
+    __tablename__ = "ai_assistant_permissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    max_messages_per_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_messages_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_messages_per_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_new_chats_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_new_chats_per_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"AIAssistantPermission(user_id={self.user_id}, enabled={self.enabled})"

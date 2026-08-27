@@ -9,6 +9,8 @@ from src.core.app_config import settings
 from src.core.logger import get_logger
 from src.core.rate_limit import limiter
 from src.core.responses import SuccessResponse
+from src.modules.ai_assistant.dependencies import get_ai_assistant_permission_service
+from src.modules.ai_assistant.permissions.service import AIAssistantPermissionService
 from src.modules.notifications.dependencies import get_notification_service
 from src.modules.notifications.enums import NotificationPriority, NotificationType
 from src.modules.notifications.service import NotificationService
@@ -31,7 +33,7 @@ from src.modules.users.schemas import (
     TokenPair,
     UpdateProfileRequest,
     UpdateUsernameRequest,
-    UserMe,
+    UserMeResponse,
     UserProfile,
     UserPublic,
     VerifyResetOTPRequest,
@@ -258,11 +260,22 @@ async def logout_all_devices(
 
 @user_router.get(
     "/me",
-    response_model=SuccessResponse[UserMe],
+    response_model=SuccessResponse[UserMeResponse],
     summary="Get the currently authenticated user's identity",
 )
-async def get_me(current_user: CurrentUser) -> SuccessResponse[UserMe]:
-    return SuccessResponse(message="OK", data=UserMe.model_validate(current_user))
+async def get_me(
+    current_user: CurrentUser,
+    ai_assistant_permissions: Annotated[
+        AIAssistantPermissionService, Depends(get_ai_assistant_permission_service)
+    ],
+) -> SuccessResponse[UserMeResponse]:
+    ai_assistant_status = await ai_assistant_permissions.get_me_status(current_user.id)
+    me = UserMeResponse(
+        **UserPublic.model_validate(current_user).model_dump(),
+        full_name=current_user.full_name,
+        ai_assistant=ai_assistant_status,
+    )
+    return SuccessResponse(message="OK", data=me)
 
 
 # ── Password management ──────────────────────────────────────────────────

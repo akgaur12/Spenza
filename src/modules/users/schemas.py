@@ -5,6 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from src.modules.ai_assistant.permissions.schemas import AIAssistantMeStatus
 from src.modules.users.models import UserRole
 from src.modules.users.validators import validate_password_strength, validate_username
 
@@ -94,6 +95,20 @@ class UserPublic(BaseModel):
 
 class UserMe(UserPublic):
     full_name: str | None
+
+
+class UserMeResponse(UserMe):
+    """`GET /api/users/me`'s actual response shape — `UserMe` plus the
+    user's own AI assistant status/usage, so a frontend can gate its UI
+    (hide the entry point, show remaining quota) without a dedicated call.
+    Kept separate from `UserMe` itself (rather than adding the field there)
+    so `UserProfile` — which extends `UserMe` and is built directly via
+    `UserProfile.model_validate(current_user)` from the ORM object in
+    `/profile` — doesn't also need an `ai_assistant` value it has no
+    attribute for.
+    """
+
+    ai_assistant: AIAssistantMeStatus
 
 
 class UserProfile(UserMe):

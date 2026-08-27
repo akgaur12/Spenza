@@ -83,7 +83,6 @@ ignore = [
 "scripts/**" = ["T20"]
 # slowapi requires an unused `request: Request` param on every rate-limited endpoint.
 "src/modules/users/user_router.py" = ["ARG001"]
-"src/modules/ai_assistant/router.py" = ["ARG001"]
 # FastAPI exception-handler / lifespan signatures require these unused params.
 "src/core/exception_handlers.py" = ["ARG001"]
 "src/lifespan.py" = ["ARG001"]

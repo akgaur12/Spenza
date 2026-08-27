@@ -21,6 +21,7 @@ from src.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware  
 from src.core.rate_limit import limiter  # noqa: E402
 from src.lifespan import lifespan  # noqa: E402
 from src.modules.admin.router import admin_stats_router  # noqa: E402
+from src.modules.ai_assistant.admin_router import admin_ai_assistant_router  # noqa: E402
 from src.modules.ai_assistant.router import chat_router  # noqa: E402
 from src.modules.analytics.router import analytics_router  # noqa: E402
 from src.modules.categories.admin_router import admin_category_router  # noqa: E402
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_email_router)
     app.include_router(admin_stats_router)
     app.include_router(chat_router)
+    app.include_router(admin_ai_assistant_router)
     app.include_router(health_router)
 
     @app.get("/", include_in_schema=False)

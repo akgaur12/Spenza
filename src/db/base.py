@@ -4,7 +4,7 @@ themselves on `Base.metadata`.
 """
 
 from src.core.database import Base
-from src.modules.ai_assistant.models import Chat, ChatMessage, ChatRun
+from src.modules.ai_assistant.models import AIAssistantPermission, Chat, ChatMessage, ChatRun
 from src.modules.categories.models import Category
 from src.modules.expenses.models import Expense
 from src.modules.import_export.models import ImportSession
@@ -13,6 +13,7 @@ from src.modules.recurring_expenses.models import RecurringExpense
 from src.modules.users.models import EmailOTP, RefreshSession, User
 
 __all__ = [
+    "AIAssistantPermission",
     "Base",
     "Category",
     "Chat",

@@ -38,6 +38,7 @@ from src.modules.ai_assistant.exceptions import (
     RunNotCancellableError,
 )
 from src.modules.ai_assistant.models import DEFAULT_CHAT_TITLE, Chat, ChatMessage, ChatRun
+from src.modules.ai_assistant.permissions.service import AIAssistantPermissionService
 from src.modules.ai_assistant.providers.factory import LLMFactory
 from src.modules.ai_assistant.repository import (
     ChatMessageRepository,
@@ -78,10 +79,13 @@ class ChatService:
         self._chats = ChatRepository(session)
         self._messages = ChatMessageRepository(session)
         self._runs = ChatRunRepository(session)
+        self._permissions = AIAssistantPermissionService(session)
 
     # ── Chat CRUD ─────────────────────────────────────────────────────────
 
     async def create_for_user(self, user: User, data: ChatCreate) -> Chat:
+        await self._permissions.check_can_create_chat(user)
+
         provider = data.provider or settings.AI_DEFAULT_PROVIDER
         model = data.model or settings.AI_DEFAULT_MODEL
         chat = self._chats.create(
@@ -134,6 +138,7 @@ class ChatService:
 
     async def prepare_run(self, chat_id: uuid.UUID, user: User, data: MessageCreate) -> PreparedRun:
         chat = await self.get_for_user(chat_id, user)
+        await self._permissions.check_can_send_message(user)
 
         # Fail fast, before any SSE bytes are sent: an unconfigured
         # provider or an unsupported model surfaces as a normal HTTP error

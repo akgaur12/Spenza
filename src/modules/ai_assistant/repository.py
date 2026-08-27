@@ -79,6 +79,17 @@ class ChatRepository:
     async def delete(self, chat: Chat) -> None:
         await self._session.delete(chat)
 
+    async def count_created_since(self, user_id: uuid.UUID, since: datetime) -> int:
+        """How many chats this user has created at or after `since` — used
+        by `permissions.service` to enforce `max_new_chats_per_day/month`.
+        """
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(Chat)
+            .where(Chat.user_id == user_id, Chat.created_at >= since)
+        )
+        return total or 0
+
     async def flush(self) -> None:
         await self._session.flush()
 
@@ -92,6 +103,24 @@ class ChatMessageRepository:
             select(func.max(ChatMessage.sequence)).where(ChatMessage.chat_id == chat_id)
         )
         return (current_max or 0) + 1
+
+    async def count_user_messages_since(self, user_id: uuid.UUID, since: datetime) -> int:
+        """How many messages this user has *sent* (role=user, never
+        counting the assistant's replies) at or after `since`, across all
+        of their chats — used by `permissions.service` to enforce
+        `max_messages_per_minute/day/month`.
+        """
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(ChatMessage)
+            .join(Chat, Chat.id == ChatMessage.chat_id)
+            .where(
+                Chat.user_id == user_id,
+                ChatMessage.role == ChatMessageRole.USER,
+                ChatMessage.created_at >= since,
+            )
+        )
+        return total or 0
 
     def create(
         self,

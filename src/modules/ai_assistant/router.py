@@ -4,20 +4,22 @@ Every route requires authentication via `CurrentUser`. Chats are private
 user data — ownership is always derived from `CurrentUser`, never accepted
 from the request body/path, mirroring `expenses/router.py`'s design rule.
 
-`POST .../messages` is the one route that talks to an LLM provider, so it's
-the only one rate-limited here (`AI_CHAT_REQUESTS_PER_MINUTE`) and the only
-one that returns `text/event-stream` instead of the standard
-`SuccessResponse` envelope.
+`POST .../messages` is the one route that talks to an LLM provider. Access
+and rate limiting for it are per-user and opt-in — enforced by
+`ChatService`/`AIAssistantPermissionService` against `ai_assistant_
+permissions` (see `permissions.service`), not a route-level slowapi
+decorator: a disabled user has no IP-keyed rate to limit, and each user's
+limit is independently configurable by an admin. It's also the only route
+that returns `text/event-stream` instead of the standard `SuccessResponse`
+envelope.
 """
 
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
-from src.core.app_config import settings
-from src.core.rate_limit import limiter
 from src.core.responses import SuccessResponse
 from src.modules.ai_assistant.dependencies import get_chat_service
 from src.modules.ai_assistant.schemas import (
@@ -157,9 +159,7 @@ async def list_messages(
         "`run_completed`, `run_failed`, `run_cancelled`)."
     ),
 )
-@limiter.limit(settings.AI_CHAT_REQUESTS_PER_MINUTE)
 async def send_message(
-    request: Request,
     chat_id: uuid.UUID,
     data: MessageCreate,
     current_user: CurrentUser,
