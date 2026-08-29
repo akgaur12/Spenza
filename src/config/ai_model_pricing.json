@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "description": "Static per-model price table for computing estimated AI assistant cost from chat_runs.metadata token counts (input_tokens/output_tokens). Not wired into any code yet — this is data only.",
+    "currency": "USD",
+    "unit": "per_million_tokens",
+    "last_verified": "2026-08-28",
+    "notes": [
+      "Prices change over time and are not fetched live — re-verify against each provider's official pricing page before relying on this for real billing/cost reporting.",
+      "pricing_available: false means no per-token rate exists to compute cost from; leave cost as null/unknown for that model rather than guessing.",
+      "OpenRouter model ids ending in ':free' are $0 by OpenRouter's own naming convention for that routing variant, but free-tier availability/rate limits can change or be withdrawn."
+    ]
+  },
+  "groq": {
+    "groq/compound": {
+      "pricing_available": false,
+      "input_price": null,
+      "output_price": null,
+      "note": "Groq Compound is an agentic system, not a single model — it bills the underlying model(s) it selects at their own per-token rates plus separate charges for the server-side tools it invokes (web search, code execution, etc.). There is no single flat per-token rate for it.",
+      "source": "https://console.groq.com/docs/compound"
+    },
+    "openai/gpt-oss-120b": {
+      "pricing_available": true,
+      "input_price": 0.15,
+      "output_price": 0.60,
+      "source": "https://console.groq.com/docs/pricing"
+    },
+    "openai/gpt-oss-20b": {
+      "pricing_available": true,
+      "input_price": 0.075,
+      "output_price": 0.30,
+      "source": "https://console.groq.com/docs/pricing"
+    },
+    "qwen/qwen3.8-27b": {
+      "pricing_available": false,
+      "input_price": null,
+      "output_price": null,
+      "note": "As of 2026-08-28, Qwen3.8-27B's hosted API pricing has not been published yet (Qwen's own model card lists its managed Cloud endpoint as 'coming soon'). Do not confuse with the older, already-priced 'qwen/qwen3.6-27b' ($0.60 input / $3.00 output per million tokens on Groq) — that is a different model id.",
+      "source": "https://console.groq.com/docs/pricing"
+    }
+  },
+  "ollama": {
+    "ornith:9b": {
+      "pricing_available": true,
+      "input_price": 0.075,
+      "output_price": 0.30,
+      "note": "Ollama runs locally/self-hosted (see OLLAMA_BASE_URL in .env) — there is no per-token API charge. Real cost is your own compute/electricity, not something derivable from a per-token rate, so $0 here means 'not billed per token', not 'free to run'.",
+      "source": null
+    }
+  },
+  "open_router": {
+    "nvidia/nemotron-3.5-lightning:free": {
+      "pricing_available": true,
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "note": "OpenRouter ':free' variant.",
+      "source": "https://openrouter.ai/models"
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b:free": {
+      "pricing_available": true,
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "note": "OpenRouter ':free' variant.",
+      "source": "https://openrouter.ai/models"
+    },
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+      "pricing_available": true,
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "note": "OpenRouter ':free' variant.",
+      "source": "https://openrouter.ai/models"
+    },
+    "minimax/minimax-m3:free": {
+      "pricing_available": true,
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "note": "OpenRouter ':free' variant.",
+      "source": "https://openrouter.ai/models"
+    },
+    "z-ai/glm-5.2:free": {
+      "pricing_available": true,
+      "input_price": 0.0,
+      "output_price": 0.0,
+      "note": "OpenRouter ':free' variant.",
+      "source": "https://openrouter.ai/models"
+    }
+  }
+}

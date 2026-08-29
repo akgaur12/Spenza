@@ -84,6 +84,10 @@ class ChatMessage(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("chat_id", "sequence", name="uq_chat_messages_chat_id_sequence"),
         Index("ix_chat_messages_chat_id_sequence", "chat_id", "sequence"),
+        # Cross-user admin observability queries (see `ai_assistant.
+        # observability`) scan by `created_at`/`role` alone, with no
+        # `chat_id` filter — the composite index above doesn't help those.
+        Index("ix_chat_messages_role_created_at", "role", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -115,6 +119,10 @@ class ChatRun(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_chat_runs_chat_id_created_at", "chat_id", "created_at"),
         Index("ix_chat_runs_status", "status"),
+        # Cross-user admin observability queries (see `ai_assistant.
+        # observability`) scan by `created_at` alone, with no `chat_id`
+        # filter — the composite index above doesn't help those.
+        Index("ix_chat_runs_created_at", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

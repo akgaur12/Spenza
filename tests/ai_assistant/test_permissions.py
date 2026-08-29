@@ -20,68 +20,16 @@ import src.modules.ai_assistant.permissions.service as permissions_service
 from src.core.app_config import settings
 from tests.ai_assistant.conftest import InstallFakeModel
 from tests.ai_assistant.fakes import FakeChatModel, FakeTurn
-from tests.conftest import RecordingEmailBackend, promote_to_admin, register_verified_user
-
-ADMIN_CREDENTIALS = {"email": "admin@example.com", "password": "SecureP@ss1"}
-ADMIN_SIGNUP_PAYLOAD = {**ADMIN_CREDENTIALS, "username": "admin_user"}
-ADMIN_LOGIN_PAYLOAD = {
-    "identifier": ADMIN_CREDENTIALS["email"],
-    "password": ADMIN_CREDENTIALS["password"],
-}
-
-TARGET_CREDENTIALS = {"email": "target.user@example.com", "password": "SecureP@ss1"}
-TARGET_SIGNUP_PAYLOAD = {**TARGET_CREDENTIALS, "username": "target_user"}
-TARGET_LOGIN_PAYLOAD = {
-    "identifier": TARGET_CREDENTIALS["email"],
-    "password": TARGET_CREDENTIALS["password"],
-}
-
-
-async def _login_as_admin(
-    client: AsyncClient,
-    email_backend: RecordingEmailBackend,
-    db_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    await register_verified_user(client, email_backend, ADMIN_SIGNUP_PAYLOAD)
-    await promote_to_admin(db_session_factory, ADMIN_CREDENTIALS["email"])
-    response = await client.post("/api/users/login", json=ADMIN_LOGIN_PAYLOAD)
-    assert response.status_code == 200, response.text
-
-
-async def _switch_to_admin(client: AsyncClient) -> None:
-    """Re-authenticates as the already-registered admin — use this (not
-    `_login_as_admin`) to switch back to the admin session later in a test
-    that already called `_login_as_admin` once.
-    """
-    response = await client.post("/api/users/login", json=ADMIN_LOGIN_PAYLOAD)
-    assert response.status_code == 200, response.text
-
-
-async def _register_target(client: AsyncClient, email_backend: RecordingEmailBackend) -> str:
-    """Registers the target (non-admin) user and returns their id, using
-    whichever session is currently authenticated on `client` to look them
-    up via the admin list endpoint — so the caller must already be logged
-    in as an admin.
-    """
-    await register_verified_user(client, email_backend, TARGET_SIGNUP_PAYLOAD)
-    list_response = await client.get("/api/v1/admin/users")
-    assert list_response.status_code == 200, list_response.text
-    items = list_response.json()["data"]["items"]
-    target = next(u for u in items if u["email"] == TARGET_CREDENTIALS["email"])
-    target_id: str = target["id"]
-    return target_id
-
-
-async def _login_as_target(client: AsyncClient) -> None:
-    response = await client.post("/api/users/login", json=TARGET_LOGIN_PAYLOAD)
-    assert response.status_code == 200, response.text
-
-
-async def _patch_permission(client: AsyncClient, user_id: str, **body: object) -> dict[str, object]:
-    response = await client.patch(f"/api/v1/admin/users/{user_id}/ai-assistant", json=body)
-    assert response.status_code == 200, response.text
-    data: dict[str, object] = response.json()["data"]
-    return data
+from tests.ai_assistant.helpers import (
+    TARGET_LOGIN_PAYLOAD,
+    TARGET_SIGNUP_PAYLOAD,
+    login_as_admin,
+    login_as_target,
+    patch_ai_assistant_permission,
+    register_target,
+    switch_to_admin,
+)
+from tests.conftest import RecordingEmailBackend, register_verified_user
 
 
 @pytest.fixture
@@ -103,8 +51,8 @@ async def test_admin_get_returns_disabled_defaults_when_no_row(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
 
     response = await client.get(f"/api/v1/admin/users/{target_id}/ai-assistant")
 
@@ -125,10 +73,10 @@ async def test_admin_patch_enables_and_sets_limits(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
 
-    data = await _patch_permission(
+    data = await patch_ai_assistant_permission(
         client,
         target_id,
         enabled=True,
@@ -144,7 +92,7 @@ async def test_admin_patch_enables_and_sets_limits(
     assert data["max_messages_per_month"] is None  # untouched field stays unset
 
     # A later partial PATCH only touches the fields it sends.
-    data = await _patch_permission(client, target_id, max_messages_per_day=50)
+    data = await patch_ai_assistant_permission(client, target_id, max_messages_per_day=50)
     assert data["max_messages_per_day"] == 50
     assert data["enabled"] is True  # unaffected by the partial update
     assert data["max_messages_per_minute"] == 5
@@ -155,11 +103,11 @@ async def test_admin_patch_explicit_null_clears_a_limit(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True, max_messages_per_day=100)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(client, target_id, enabled=True, max_messages_per_day=100)
 
-    data = await _patch_permission(client, target_id, max_messages_per_day=None)
+    data = await patch_ai_assistant_permission(client, target_id, max_messages_per_day=None)
 
     assert data["max_messages_per_day"] is None
     assert data["enabled"] is True
@@ -184,7 +132,7 @@ async def test_admin_endpoints_404_for_nonexistent_user(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
+    await login_as_admin(client, email_backend, db_session_factory)
 
     get_response = await client.get(
         "/api/v1/admin/users/00000000-0000-0000-0000-000000000000/ai-assistant"
@@ -207,20 +155,20 @@ async def test_me_reflects_disabled_default_and_admin_changes(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     me_response = await client.get("/api/users/me")
     assert me_response.status_code == 200, me_response.text
     ai_status = me_response.json()["data"]["ai_assistant"]
     assert ai_status["enabled"] is False
     assert "max_messages_per_minute" not in ai_status  # never exposed to the end user
 
-    await _switch_to_admin(client)
-    await _patch_permission(client, target_id, enabled=True, max_new_chats_per_day=7)
+    await switch_to_admin(client)
+    await patch_ai_assistant_permission(client, target_id, enabled=True, max_new_chats_per_day=7)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     me_response = await client.get("/api/users/me")
     ai_status = me_response.json()["data"]["ai_assistant"]
     assert ai_status["enabled"] is True
@@ -237,19 +185,19 @@ async def test_disabled_user_cannot_create_chat_or_send_message_but_keeps_histor
     db_session_factory: async_sessionmaker[AsyncSession],
     install_fake_model: InstallFakeModel,
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(client, target_id, enabled=True)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     create_response = await client.post("/api/v1/chats", json={"title": "Before disabling"})
     assert create_response.status_code == 201, create_response.text
     chat_id = create_response.json()["data"]["id"]
 
-    await _switch_to_admin(client)
-    await _patch_permission(client, target_id, enabled=False)
+    await switch_to_admin(client)
+    await patch_ai_assistant_permission(client, target_id, enabled=False)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     blocked_create = await client.post("/api/v1/chats", json={})
     assert blocked_create.status_code == 403, blocked_create.text
     assert blocked_create.json()["error_code"] == "AI_ASSISTANT_DISABLED"
@@ -278,11 +226,11 @@ async def test_daily_new_chat_limit_exceeded(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True, max_new_chats_per_day=1)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(client, target_id, enabled=True, max_new_chats_per_day=1)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     first = await client.post("/api/v1/chats", json={})
     assert first.status_code == 201, first.text
 
@@ -296,13 +244,13 @@ async def test_monthly_new_chat_limit_exceeded(
     email_backend: RecordingEmailBackend,
     db_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(
         client, target_id, enabled=True, max_new_chats_per_day=None, max_new_chats_per_month=1
     )
 
-    await _login_as_target(client)
+    await login_as_target(client)
     first = await client.post("/api/v1/chats", json={})
     assert first.status_code == 201, first.text
 
@@ -323,11 +271,11 @@ async def test_per_minute_message_limit_falls_back_to_global_default_when_unset(
 ) -> None:
     monkeypatch.setattr(settings, "AI_CHAT_REQUESTS_PER_MINUTE", 1)
 
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True)  # per-minute left unset
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(client, target_id, enabled=True)  # per-minute left unset
 
-    await _login_as_target(client)
+    await login_as_target(client)
     chat = (await client.post("/api/v1/chats", json={})).json()["data"]
 
     install_fake_model(FakeChatModel(turns=[FakeTurn(text_chunks=["ok"])]))
@@ -347,11 +295,11 @@ async def test_per_minute_message_limit_uses_per_user_override(
     install_fake_model: InstallFakeModel,
 ) -> None:
     # Global default left generous; the per-user override is the binding one.
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True, max_messages_per_minute=1)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(client, target_id, enabled=True, max_messages_per_minute=1)
 
-    await _login_as_target(client)
+    await login_as_target(client)
     chat = (await client.post("/api/v1/chats", json={})).json()["data"]
 
     install_fake_model(FakeChatModel(turns=[FakeTurn(text_chunks=["ok"])]))
@@ -370,14 +318,14 @@ async def test_daily_message_limit_exceeded(
     db_session_factory: async_sessionmaker[AsyncSession],
     install_fake_model: InstallFakeModel,
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
     # A generous per-minute ceiling isolates the daily limit being tested.
-    await _patch_permission(
+    await patch_ai_assistant_permission(
         client, target_id, enabled=True, max_messages_per_minute=100, max_messages_per_day=1
     )
 
-    await _login_as_target(client)
+    await login_as_target(client)
     chat = (await client.post("/api/v1/chats", json={})).json()["data"]
 
     install_fake_model(FakeChatModel(turns=[FakeTurn(text_chunks=["ok"])]))
@@ -396,9 +344,9 @@ async def test_monthly_message_limit_exceeded(
     db_session_factory: async_sessionmaker[AsyncSession],
     install_fake_model: InstallFakeModel,
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(
         client,
         target_id,
         enabled=True,
@@ -407,7 +355,7 @@ async def test_monthly_message_limit_exceeded(
         max_messages_per_month=1,
     )
 
-    await _login_as_target(client)
+    await login_as_target(client)
     chat = (await client.post("/api/v1/chats", json={})).json()["data"]
 
     install_fake_model(FakeChatModel(turns=[FakeTurn(text_chunks=["ok"])]))
@@ -426,16 +374,18 @@ async def test_usage_counts_reflect_sent_messages_and_created_chats(
     db_session_factory: async_sessionmaker[AsyncSession],
     install_fake_model: InstallFakeModel,
 ) -> None:
-    await _login_as_admin(client, email_backend, db_session_factory)
-    target_id = await _register_target(client, email_backend)
-    await _patch_permission(client, target_id, enabled=True, max_messages_per_minute=100)
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(
+        client, target_id, enabled=True, max_messages_per_minute=100
+    )
 
-    await _login_as_target(client)
+    await login_as_target(client)
     chat = (await client.post("/api/v1/chats", json={})).json()["data"]
     install_fake_model(FakeChatModel(turns=[FakeTurn(text_chunks=["ok"])]))
     await client.post(f"/api/v1/chats/{chat['id']}/messages", json={"message": "hi"})
 
-    await _switch_to_admin(client)
+    await switch_to_admin(client)
     response = await client.get(f"/api/v1/admin/users/{target_id}/ai-assistant")
     data = response.json()["data"]
     assert data["messages_sent_today"] == 1
