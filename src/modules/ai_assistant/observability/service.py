@@ -28,6 +28,7 @@ from typing import Any, Literal
 
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from src.core.periods import start_of_month, start_of_week
 from src.core.timezone import APP_TIMEZONE
@@ -35,6 +36,8 @@ from src.modules.ai_assistant.enums import ChatMessageRole, ChatRunStatus, LLMPr
 from src.modules.ai_assistant.models import AIAssistantPermission, Chat, ChatMessage, ChatRun
 from src.modules.ai_assistant.observability.pricing import estimate_cost_usd
 from src.modules.ai_assistant.observability.schemas import (
+    AIAssistantMessageLog,
+    AIAssistantMessageLogListResponse,
     AIAssistantOverview,
     AIAssistantProviderUsage,
     AIAssistantProviderUsageResponse,
@@ -598,3 +601,132 @@ class AIAssistantObservabilityService:
             user_id: _sum_metadata(entries).estimated_cost_usd
             for user_id, entries in entries_by_user.items()
         }
+
+    async def get_message_logs(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        user_id: uuid.UUID | None = None,
+        status: ChatRunStatus | None = None,
+        provider: LLMProvider | None = None,
+    ) -> AIAssistantMessageLogListResponse:
+        """One row per run — the user message that triggered it, the
+        assistant reply it produced, and its token/cost/latency figures.
+        The "input message" is the `ChatMessage` immediately preceding the
+        run's assistant message in `sequence` — always a `user` row, since
+        `ChatService.prepare_run` creates them as an adjacent (user,
+        assistant) pair (see `ai_assistant.service`).
+        """
+        offset = (page - 1) * page_size
+        assistant_message = aliased(ChatMessage)
+
+        conditions = [*_chat_conditions(user_id)]
+        if status is not None:
+            conditions.append(ChatRun.status == status)
+        if provider is not None:
+            conditions.append(ChatRun.provider == provider)
+
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(ChatRun)
+            .join(Chat, Chat.id == ChatRun.chat_id)
+            .where(*conditions)
+        )
+
+        input_message_content = (
+            select(ChatMessage.content)
+            .where(
+                ChatMessage.chat_id == assistant_message.chat_id,
+                ChatMessage.sequence == assistant_message.sequence - 1,
+            )
+            .correlate(assistant_message)
+            .scalar_subquery()
+        )
+
+        rows = (
+            await self._session.execute(
+                select(
+                    ChatRun.id,
+                    ChatRun.chat_id,
+                    Chat.user_id,
+                    User.username,
+                    User.email,
+                    ChatRun.provider,
+                    ChatRun.model,
+                    ChatRun.status,
+                    input_message_content,
+                    assistant_message.content,
+                    ChatRun.extra_metadata,
+                    ChatRun.error,
+                    ChatRun.created_at,
+                    ChatRun.started_at,
+                    ChatRun.completed_at,
+                )
+                .select_from(ChatRun)
+                .join(Chat, Chat.id == ChatRun.chat_id)
+                .join(User, User.id == Chat.user_id)
+                .join(assistant_message, assistant_message.id == ChatRun.message_id)
+                .where(*conditions)
+                .order_by(ChatRun.created_at.desc(), ChatRun.id.desc())
+                .offset(offset)
+                .limit(page_size)
+            )
+        ).all()
+
+        items = []
+        for (
+            run_id,
+            chat_id,
+            row_user_id,
+            username,
+            email,
+            row_provider,
+            model,
+            row_status,
+            input_message,
+            output_message,
+            metadata,
+            error,
+            created_at,
+            started_at,
+            completed_at,
+        ) in rows:
+            metadata = metadata or {}
+            input_tokens = metadata.get("input_tokens")
+            output_tokens = metadata.get("output_tokens")
+            total_tokens = (
+                input_tokens + output_tokens
+                if input_tokens is not None and output_tokens is not None
+                else None
+            )
+            items.append(
+                AIAssistantMessageLog(
+                    run_id=run_id,
+                    chat_id=chat_id,
+                    user_id=row_user_id,
+                    username=username,
+                    email=email,
+                    provider=row_provider,
+                    model=model,
+                    status=row_status,
+                    input_message=input_message,
+                    output_message=output_message,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    tool_calls=metadata.get("tool_calls") or 0,
+                    latency_ms=metadata.get("latency_ms"),
+                    estimated_cost_usd=estimate_cost_usd(
+                        row_provider, model, input_tokens=input_tokens, output_tokens=output_tokens
+                    ),
+                    error=error,
+                    created_at=created_at,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
+            )
+
+        return AIAssistantMessageLogListResponse(
+            items=items, total=total or 0, page=page, page_size=page_size
+        )

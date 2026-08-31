@@ -17,7 +17,9 @@ from fastapi import APIRouter, Depends, Query
 
 from src.core.responses import SuccessResponse
 from src.modules.ai_assistant.dependencies import get_ai_assistant_observability_service
+from src.modules.ai_assistant.enums import ChatRunStatus, LLMProvider
 from src.modules.ai_assistant.observability.schemas import (
+    AIAssistantMessageLogListResponse,
     AIAssistantOverview,
     AIAssistantProviderUsageResponse,
     AIAssistantUsageTimeseries,
@@ -116,3 +118,25 @@ async def get_ai_assistant_user_usage(
         page=page, page_size=page_size, sort_by=sort_by, order=order, user_id=user_id
     )
     return SuccessResponse(message="OK", data=usage)
+
+
+@admin_ai_assistant_observability_router.get(
+    "/logs",
+    response_model=SuccessResponse[AIAssistantMessageLogListResponse],
+    summary="Per-message log: who sent it, input/output text, tokens, and estimated cost",
+)
+async def get_ai_assistant_message_logs(
+    _admin: AdminUser,
+    observability_service: Annotated[
+        AIAssistantObservabilityService, Depends(get_ai_assistant_observability_service)
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    status: Annotated[ChatRunStatus | None, Query()] = None,
+    provider: Annotated[LLMProvider | None, Query()] = None,
+    user_id: _UserIdFilter = None,
+) -> SuccessResponse[AIAssistantMessageLogListResponse]:
+    logs = await observability_service.get_message_logs(
+        page=page, page_size=page_size, user_id=user_id, status=status, provider=provider
+    )
+    return SuccessResponse(message="OK", data=logs)

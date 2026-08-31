@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from src.modules.ai_assistant.enums import LLMProvider
+from src.modules.ai_assistant.enums import ChatRunStatus, LLMProvider
 from src.modules.analytics.schemas import TrendInterval
 
 # ── Overview ──────────────────────────────────────────────────────────────
@@ -111,6 +111,44 @@ class AIAssistantUserUsage(BaseModel):
 
 class AIAssistantUserUsageListResponse(BaseModel):
     items: list[AIAssistantUserUsage]
+    total: int
+    page: int
+    page_size: int
+
+
+# ── Per-message logs ──────────────────────────────────────────────────────
+
+
+class AIAssistantMessageLog(BaseModel):
+    """One agent run (one user message -> one assistant reply), for the
+    admin log table: who sent it, what went in and came out, and its
+    token/cost/latency figures.
+    """
+
+    run_id: uuid.UUID
+    chat_id: uuid.UUID
+    user_id: uuid.UUID
+    username: str
+    email: str
+    provider: LLMProvider
+    model: str
+    status: ChatRunStatus
+    input_message: str | None
+    output_message: str
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    tool_calls: int
+    latency_ms: float | None
+    estimated_cost_usd: Decimal | None
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+
+class AIAssistantMessageLogListResponse(BaseModel):
+    items: list[AIAssistantMessageLog]
     total: int
     page: int
     page_size: int

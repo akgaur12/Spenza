@@ -544,3 +544,117 @@ async def test_user_id_filter_scopes_all_endpoints_to_a_single_user(
 
     system_users = (await client.get("/api/v1/admin/ai-assistant/users")).json()["data"]
     assert system_users["total"] == 2
+
+
+async def test_message_logs_records_input_output_tokens_and_cost(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    install_fake_model: InstallFakeModel,
+) -> None:
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(
+        client, target_id, enabled=True, max_messages_per_minute=100
+    )
+
+    await login_as_target(client)
+    chat = (
+        await client.post(
+            "/api/v1/chats", json={"provider": "groq", "model": "openai/gpt-oss-120b"}
+        )
+    ).json()["data"]
+    install_fake_model(
+        FakeChatModel(
+            turns=[
+                FakeTurn(
+                    text_chunks=["it's ", "42"],
+                    usage={
+                        "input_tokens": 1_000_000,
+                        "output_tokens": 1_000_000,
+                        "total_tokens": 2_000_000,
+                    },
+                )
+            ]
+        )
+    )
+    response = await client.post(
+        f"/api/v1/chats/{chat['id']}/messages", json={"message": "what's the answer"}
+    )
+    assert response.status_code == 200, response.text
+
+    await switch_to_admin(client)
+    logs = (await client.get("/api/v1/admin/ai-assistant/logs")).json()["data"]
+
+    assert logs["total"] == 1
+    row = logs["items"][0]
+    assert row["chat_id"] == chat["id"]
+    assert row["user_id"] == target_id
+    assert row["provider"] == "groq"
+    assert row["model"] == "openai/gpt-oss-120b"
+    assert row["status"] == "completed"
+    assert row["input_message"] == "what's the answer"
+    assert row["output_message"] == "it's 42"
+    assert row["input_tokens"] == 1_000_000
+    assert row["output_tokens"] == 1_000_000
+    assert row["total_tokens"] == 2_000_000
+    assert row["estimated_cost_usd"] == "0.75"
+    assert row["error"] is None
+
+
+async def test_message_logs_filters_by_user_status_and_provider(
+    client: AsyncClient,
+    email_backend: RecordingEmailBackend,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    install_fake_model: InstallFakeModel,
+) -> None:
+    await login_as_admin(client, email_backend, db_session_factory)
+    target_id = await register_target(client, email_backend)
+    await patch_ai_assistant_permission(
+        client, target_id, enabled=True, max_messages_per_minute=100
+    )
+
+    await register_verified_user(client, email_backend, USER_A_SIGNUP)
+    list_response = await client.get("/api/v1/admin/users")
+    items = list_response.json()["data"]["items"]
+    user_a_id = next(u for u in items if u["email"] == USER_A["email"])["id"]
+    await patch_ai_assistant_permission(
+        client, user_a_id, enabled=True, max_messages_per_minute=100
+    )
+
+    await login_as_target(client)
+    target_chat = (await client.post("/api/v1/chats", json={})).json()["data"]
+    await _send_one_message(client, target_chat["id"], install_fake_model)
+
+    await switch_to_user_a(client)
+    user_a_chat = (await client.post("/api/v1/chats", json={})).json()["data"]
+    install_fake_model(FakeChatModel(turns=[FakeTurn(error=RuntimeError("boom"))]))
+    response = await client.post(
+        f"/api/v1/chats/{user_a_chat['id']}/messages", json={"message": "hi"}
+    )
+    assert response.status_code == 200, response.text
+
+    await switch_to_admin(client)
+
+    by_user = (
+        await client.get("/api/v1/admin/ai-assistant/logs", params={"user_id": target_id})
+    ).json()["data"]
+    assert by_user["total"] == 1
+    assert by_user["items"][0]["user_id"] == target_id
+
+    by_status = (
+        await client.get("/api/v1/admin/ai-assistant/logs", params={"status": "failed"})
+    ).json()["data"]
+    assert by_status["total"] == 1
+    assert by_status["items"][0]["user_id"] == user_a_id
+    assert by_status["items"][0]["error"] is not None
+
+    by_provider = (
+        await client.get(
+            "/api/v1/admin/ai-assistant/logs", params={"provider": target_chat["provider"]}
+        )
+    ).json()["data"]
+    assert by_provider["total"] == 2
+
+    all_logs = (await client.get("/api/v1/admin/ai-assistant/logs")).json()["data"]
+    assert all_logs["total"] == 2
